@@ -82,6 +82,7 @@ runs:
     - name: Install PyTorch ${{ inputs.torch-version }}+cu${{ inputs.cuda-version }}
       shell: bash -euxo pipefail {0}
       run: |
+        echo ::group::Install PyTorch ${{ inputs.torch-version }}+cu${{ inputs.cuda-version }}
         pip install --upgrade pip
         # With python 3.13 and torch 2.5.1, unless we update typing-extensions, we get error
         # AttributeError: attribute '__default__' of 'typing.ParamSpec' objects is not writable
@@ -110,6 +111,7 @@ runs:
         python -c "import torch; print('PyTorch:', torch.__version__)"
         python -c "import torch; print('CUDA:', torch.version.cuda)"
         python -c "from torch.utils import cpp_extension; print (cpp_extension.CUDA_HOME)"
+        echo ::endgroup::
 
     - name: Restore build cache
       uses: actions/cache/restore@v4
@@ -141,11 +143,12 @@ runs:
       shell: bash -euxo pipefail {0}
       id: build_wheel
       run: |
+        echo ::group::Build wheel
         # We want setuptools >= 49.6.0 otherwise we can't compile the extension if system CUDA version is 11.7 and pytorch cuda version is 11.6
         # https://github.com/pytorch/pytorch/blob/664058fa83f1d8eede5d66418abff6e20bd76ca8/torch/utils/cpp_extension.py#L810
         # However this still fails so I'm using a newer version of setuptools
         pip install setuptools==75.8.0
-        pip install ninja packaging wheel
+        pip install cmake torch ninja pydantic importlib-metadata>=1.0 packaging pybind11 numpy einops onnxscript
         export PATH=/usr/local/nvidia/bin:/usr/local/nvidia/lib64:$PATH
         export LD_LIBRARY_PATH=/usr/local/nvidia/lib64:/usr/local/cuda/lib64:$LD_LIBRARY_PATH
         # Limit MAX_JOBS otherwise the github runner goes OOM
@@ -171,6 +174,7 @@ runs:
 
         # Do not fail the job if timeout killed the build
         exit $EXIT_CODE
+        echo ::endgroup::
 
     - name: Log build logs after timeout
       shell: bash -euxo pipefail {0}
