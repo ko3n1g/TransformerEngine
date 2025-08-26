@@ -64,6 +64,7 @@ jobs:
           release-version: ${{ matrix.release-version }}
           python-version: ${{ matrix.python-version }}
           cuda-version: ${{ matrix.cuda-version }}
+          cudnn-version: ${{ matrix.cudnn-version }}
           torch-version: ${{ matrix.torch-version }}
           cxx11_abi: ${{ matrix.cxx11_abi }}
         env:
