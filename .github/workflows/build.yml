@@ -34,10 +34,7 @@ jobs:
         working-directory: /
   pytorch:
     name: "PyTorch"
-    runs-on: ubuntu-latest
-    container:
-      image: ${{ matrix.os }}
-      options: --user root
+    runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
