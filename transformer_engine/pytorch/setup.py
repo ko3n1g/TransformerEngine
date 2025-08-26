@@ -132,7 +132,7 @@ class CachedWheelsCommand(_bdist_wheel):
         except (urllib.error.HTTPError, urllib.error.URLError):
             print("Precompiled wheel not found. Building from source...")
             # If the wheel could not be downloaded, build from source
-            super().run()
+            return super().run()
 
 
 if __name__ == "__main__":
