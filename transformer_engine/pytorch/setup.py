@@ -62,13 +62,13 @@ def get_platform():
     """
     if sys.platform.startswith("linux"):
         return f"linux_{platform.uname().machine}"
-    elif sys.platform == "darwin":
+    if sys.platform == "darwin":
         mac_version = ".".join(platform.mac_ver()[0].split(".")[:2])
         return f"macosx_{mac_version}_x86_64"
-    elif sys.platform == "win32":
+    if sys.platform == "win32":
         return "win_amd64"
 
-    raise ValueError("Unsupported platform: {}".format(sys.platform))
+    raise ValueError(f"Unsupported platform: {sys.platform}")
 
 
 def get_wheel_url():
@@ -134,7 +134,7 @@ class CachedWheelsCommand(_bdist_wheel):
         except (urllib.error.HTTPError, urllib.error.URLError):
             print("Precompiled wheel not found. Building from source...")
             # If the wheel could not be downloaded, build from source
-            super().run()
+            return super().run()
 
 
 if __name__ == "__main__":
