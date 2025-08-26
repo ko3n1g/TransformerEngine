@@ -68,12 +68,12 @@ jobs:
           cuda-version: ${{ matrix.cuda-version }}
           torch-version: ${{ matrix.torch-version }}
           cxx11_abi: ${{ matrix.cxx11_abi }}
-
-      - name: "Build"
-        run: pip install --no-build-isolation ${{ steps.build-pytorch-wheel.outputs.wheel_name }} -v --no-deps
         env:
           NVTE_FRAMEWORK: pytorch
           MAX_JOBS: 1
+
+      - name: "Build"
+        run: pip install --no-build-isolation ${{ steps.build-pytorch-wheel.outputs.wheel_name }} -v --no-deps
 
       - name: "Sanity check"
         run: python3 tests/pytorch/test_sanity_import.py
