@@ -11,8 +11,6 @@ import os
 import shutil
 from pathlib import Path
 import platform
-import re
-import ast
 import urllib
 import setuptools
 from wheel.bdist_wheel import bdist_wheel as _bdist_wheel
@@ -69,11 +67,12 @@ def get_platform():
         return f"macosx_{mac_version}_x86_64"
     elif sys.platform == "win32":
         return "win_amd64"
-    else:
-        raise ValueError("Unsupported platform: {}".format(sys.platform))
+
+    raise ValueError("Unsupported platform: {}".format(sys.platform))
 
 
 def get_wheel_url():
+    """Construct the wheel URL for the current platform."""
     torch_version_raw = parse(torch.__version__)
     python_version = f"cp{sys.version_info.major}{sys.version_info.minor}"
     platform_name = get_platform()
