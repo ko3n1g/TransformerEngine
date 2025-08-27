@@ -44,7 +44,7 @@ jobs:
         id: build-pytorch-wheel
         with:
           release-version: ${{ inputs.release-version || github.sha }}
-          python-version: ${{ inputs.python-version || '3.3131' }}
+          python-version: ${{ inputs.python-version || '3.13' }}
           cuda-version: ${{ inputs.cuda-version || '12.9.1' }}
           cudnn-version: ${{ inputs.cudnn-version || '9' }}
           torch-version: ${{ inputs.torch-version || '2.8.0' }}
