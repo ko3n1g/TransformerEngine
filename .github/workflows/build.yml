@@ -12,7 +12,6 @@ on:
         description: "The release version to use for the build"
         required: true
         type: string
-        default: ${{ github.sha }}
       upload-to-release:
         description: "Upload wheel to this release"
         required: false
