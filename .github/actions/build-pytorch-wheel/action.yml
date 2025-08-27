@@ -130,7 +130,7 @@ runs:
       shell: bash -euxo pipefail {0}
       run: |
         echo ::group::Adjust timestamps
-        sudo find / -exec touch -t 197001010000 {} + || true
+        # sudo find / -exec touch -t 197001010000 {} + || true
         echo ::endgroup::
 
         if [ -f build.tar ]; then
