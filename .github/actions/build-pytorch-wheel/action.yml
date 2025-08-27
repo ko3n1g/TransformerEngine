@@ -80,7 +80,7 @@ runs:
         CUDA_VERSION=$(echo ${{ inputs.cuda-version }} | awk -F \. {'print $1 "-" $2'})
         CUDA_MAJOR_VERSION=$(echo ${{ inputs.cuda-version }} | awk -F \. {'print $1'})
         sudo apt-get update
-        sudo apt-get install -y libcusparse-$CUDA_VERSION libcusolver-$CUDA_VERSION libcudnn${{ inputs.cudnn-version }}-headers-cuda-$CUDA_MAJOR_VERSION
+        sudo apt-get install -y libcusparse-$CUDA_VERSION libcusolver-$CUDA_VERSION libcudnn${{ inputs.cudnn-version }}-dev-cuda-$CUDA_MAJOR_VERSION
         sudo apt-get clean
 
     - name: Install PyTorch ${{ inputs.torch-version }}+cu${{ inputs.cuda-version }}
@@ -129,7 +129,7 @@ runs:
       shell: bash -euxo pipefail {0}
       run: |
         echo ::group::Adjust timestamps
-        sudo find / -exec touch -t 197001010000 {} + || true
+        echo sudo find / -exec touch -t 197001010000 {} + || true
         echo ::endgroup::
 
         if [ -f build.tar ]; then
