@@ -11,6 +11,9 @@ inputs:
   cuda-version:
     description: "The CUDA version to use for the build"
     required: true
+  cudnn-version:
+    description: "The cuDNN version to use for the build"
+    required: true
   torch-version:
     description: "The PyTorch version to use for the build"
     required: true
@@ -77,7 +80,7 @@ runs:
       run: |
         CUDA_VERSION=$(echo ${{ inputs.cuda-version }} | awk -F \. {'print $1 "-" $2'})
         sudo apt-get update
-        sudo apt-get install -y libcusparse-$CUDA_VERSION libcusolver-$CUDA_VERSION 
+        sudo apt-get install -y libcusparse-$CUDA_VERSION libcusolver-$CUDA_VERSION libcudnn${{ inputs.cudnn-version }}-dev-cuda-$CUDA_MAJOR_VERSION
         sudo apt-get clean
 
     - name: Install PyTorch ${{ inputs.torch-version }}+cu${{ inputs.cuda-version }}
