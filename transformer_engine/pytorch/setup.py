@@ -76,7 +76,7 @@ def get_wheel_url():
     torch_version_raw = parse(torch.__version__)
     python_version = f"cp{sys.version_info.major}{sys.version_info.minor}"
     platform_name = get_platform()
-    grouped_gemm_version = te_version()
+    nvte_version = te_version()
     torch_version = f"{torch_version_raw.major}.{torch_version_raw.minor}"
     cxx11_abi = str(torch._C._GLIBCXX_USE_CXX11_ABI).upper()
 
@@ -93,10 +93,10 @@ def get_wheel_url():
     cuda_version = f"{torch_cuda_version.major}"
 
     # Determine wheel URL based on CUDA version, torch version, python version and OS
-    wheel_filename = f"{PACKAGE_NAME}-{grouped_gemm_version}+cu{cuda_version}torch{torch_version}cxx11abi{cxx11_abi}-{python_version}-{python_version}-{platform_name}.whl"
+    wheel_filename = f"{PACKAGE_NAME}-{nvte_version}+cu{cuda_version}torch{torch_version}cxx11abi{cxx11_abi}-{python_version}-{python_version}-{platform_name}.whl"
 
     wheel_url = BASE_WHEEL_URL.format(
-        tag_name=f"v{grouped_gemm_version}", wheel_name=wheel_filename
+        tag_name=f"v{nvte_version}", wheel_name=wheel_filename
     )
 
     return wheel_url, wheel_filename
