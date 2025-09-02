@@ -57,11 +57,11 @@ runs:
         sudo rm -rf /opt/ghc
         sudo rm -rf /opt/hostedtoolcache/CodeQL
 
-    - name: Set up swap space
-      if: runner.os == 'Linux'
-      uses: pierotofy/set-swap-space@v1.0
-      with:
-        swap-size-gb: 10
+    # - name: Set up swap space
+    #   if: runner.os == 'Linux'
+    #   uses: pierotofy/set-swap-space@v1.0
+    #   with:
+    #     swap-size-gb: 10
 
     - name: Install CUDA ${{ inputs.cuda-version }}
       if: ${{ inputs.cuda-version != 'cpu' }}
