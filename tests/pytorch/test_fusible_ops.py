@@ -35,15 +35,17 @@ from transformer_engine.pytorch.tensor.float8_tensor import (
     Float8Quantizer,
 )
 from transformer_engine.pytorch.tensor.mxfp8_tensor import MXFP8Tensor, MXFP8Quantizer
+from transformer_engine.pytorch.tensor.nvfp4_tensor import NVFP4Quantizer
 from transformer_engine.pytorch.utils import is_bf16_compatible
 import transformer_engine_torch as tex
 
 # Import utility functions
-from utils import dtype_tols, make_recipe, reset_rng_states
+from utils import dtype_tols, make_recipe, quantization_tols, reset_rng_states
 
-# Check if FP8 is supported
+# Check for supported quantization schemes
 fp8_available, reason_for_no_fp8 = FP8GlobalStateManager.is_fp8_available()
 mxfp8_available, reason_for_no_mxfp8 = FP8GlobalStateManager.is_mxfp8_available()
+nvfp4_available, reason_for_no_nvfp4 = FP8GlobalStateManager.is_nvfp4_available()
 
 # Supported data types
 _dtypes: list[torch.dtype] = [torch.float32, torch.float16]
@@ -59,6 +61,8 @@ if fp8_available:
     _quantization_list.extend(("fp8_delayed_scaling", "fp8_current_scaling"))
 if mxfp8_available:
     _quantization_list.append("mxfp8")
+if nvfp4_available:
+    _quantization_list.append("nvfp4")
 
 
 def maybe_skip_quantization(
@@ -66,6 +70,7 @@ def maybe_skip_quantization(
     *,
     dims: Optional[Iterable[int] | int] = None,
     device: Optional[torch.device | str] = None,
+    dtype: Optional[torch.dtype] = None,
 ) -> None:
     """Skip test case if a quantization scheme is not supported"""
 
@@ -73,12 +78,17 @@ def maybe_skip_quantization(
     if quantization is None:
         return
 
-    # Check if quantization scheme is supported
+    # Check if quantization scheme is supported on device
+    if device is not None and torch.device(device).type != "cuda":
+        pytest.skip("Quantization is only supported on CUDA devices")
     if quantization in ("fp8", "fp8_delayed_scaling", "fp8_current_scaling") and not fp8_available:
         pytest.skip(reason_for_no_fp8)
     if quantization == "mxfp8" and not mxfp8_available:
         pytest.skip(reason_for_no_mxfp8)
+    if quantization == "nvfp4" and not nvfp4_available:
+        pytest.skip(reason_for_no_nvfp4)
 
+    # Check dims
     if dims is not None:
         if not isinstance(dims, Iterable):
             dims = (dims,)
@@ -88,10 +98,14 @@ def maybe_skip_quantization(
         elif quantization == "mxfp8":
             if math.prod(dims[:-1]) % 32 != 0 or dims[-1] % 32 != 0:
                 pytest.skip("MXFP8 GEMMs require dims that are divisible by 32")
+        elif quantization == "nvfp4":
+            if math.prod(dims[:-1]) % 16 != 0 or dims[-1] % 16 != 0:
+                pytest.skip("NVFP4 GEMMs require dims that are divisible by 16")
 
-    # Check if device is supported
-    if device is not None and torch.device(device).type != "cuda":
-        pytest.skip("Quantization is only supported on CUDA devices")
+    # Check dtype
+    if dtype is not None:
+        if quantization == "nvfp4" and dtype != torch.bfloat16:
+            pytest.skip("NVFP4 quantization is only supported with BF16 data")
 
 
 @torch.no_grad()
@@ -141,6 +155,14 @@ def make_reference_and_test_tensors(
         test = quantizer(test)
     elif quantization == "mxfp8":
         test = MXFP8Quantizer(fp8_dtype=tex.DType.kFloat8E4M3)(test)
+    elif quantization == "nvfp4":
+        test = NVFP4Quantizer(
+            with_rht=False,
+            with_post_rht_amax=False,
+            with_2d_quantization=False,
+            stochastic_rounding=False,
+            with_random_sign_mask=False,
+        )(test)
     else:
         raise ValueError(f"Unsupported quantization scheme ({quantization})")
     if isinstance(test, QuantizedTensor) and not test_is_quantized:
@@ -395,12 +417,12 @@ class TestFuser:
             torch.testing.assert_close(
                 y,
                 torch.full_like(y, y_val_ref),
-                **dtype_tols(tex.DType.kFloat8E4M3),
+                **quantization_tols("fp8_delayed_scaling"),
             )
             torch.testing.assert_close(
                 x.grad,
                 torch.full_like(x.grad, dx_val_ref),
-                **dtype_tols(tex.DType.kFloat8E5M2),
+                **quantization_tols("fp8_delayed_scaling"),
             )
 
             # Check that scaling factors match expected
@@ -434,7 +456,8 @@ class TestFuser:
         # Skip invalid configurations
         in_shape = (size, size)
         with_quantization = quantization is not None
-        maybe_skip_quantization(quantization, dims=in_shape, device=device)
+        maybe_skip_quantization(quantization, dims=in_shape, device=device, dtype=init_dtype)
+        maybe_skip_quantization(quantization, dtype=final_dtype)
 
         # Random data
         dtype = torch.float32
@@ -502,7 +525,8 @@ class TestFuser:
         # Skip invalid configurations
         in_shape = (size, size)
         quantized_compute = quantization is not None
-        maybe_skip_quantization(quantization, dims=in_shape, device=device)
+        maybe_skip_quantization(quantization, dims=in_shape, device=device, dtype=model_dtype)
+        maybe_skip_quantization(quantization, dtype=autocast_dtype)
 
         # Construct operation
         recipe = make_recipe(quantization)
@@ -558,7 +582,7 @@ class TestBasicOps:
 
         # Skip invalid configurations
         with_quantization = quantization is not None
-        maybe_skip_quantization(quantization, dims=in_shape, device=device)
+        maybe_skip_quantization(quantization, dims=in_shape, device=device, dtype=dtype)
 
         # Random data
         x_ref, x_test = make_reference_and_test_tensors(
@@ -624,7 +648,7 @@ class TestBasicOps:
         # Skip invalid configurations
         if memory_format == torch.channels_last and len(in_shape) != 4:
             pytest.skip("torch.channels_last only supports 4D tensors")
-        maybe_skip_quantization(quantization, device=device)
+        maybe_skip_quantization(quantization, device=device, dtype=dtype)
         with_quantization = quantization is not None
 
         # Random data
@@ -690,7 +714,7 @@ class TestBasicOps:
 
         # Skip invalid configurations
         with_quantization = quantization is not None
-        maybe_skip_quantization(quantization, dims=in_shape, device=device)
+        maybe_skip_quantization(quantization, dims=in_shape, device=device, dtype=dtype)
 
         # Random data
         x_ref, x_test = make_reference_and_test_tensors(
@@ -752,7 +776,7 @@ class TestBasicOps:
 
         # Skip invalid configurations
         with_quantization = quantization is not None
-        maybe_skip_quantization(quantization, device=device)
+        maybe_skip_quantization(quantization, device=device, dtype=dtype)
         if quantization == "mxfp8":
             maybe_skip_quantization(quantization, dims=in_shape)
 
@@ -819,7 +843,7 @@ class TestBasicOps:
         out_shape = in_shape[:-1] + [out_features]
 
         # Skip invalid configurations
-        maybe_skip_quantization(quantization, dims=in_shape, device=device)
+        maybe_skip_quantization(quantization, dims=in_shape, device=device, dtype=dtype)
         maybe_skip_quantization(quantization, dims=out_shape)
         quantization_needed = any(
             (
@@ -899,7 +923,7 @@ class TestBasicOps:
         if dtype == torch.float32:
             tols = dtype_tols(torch.float16)  # TF32 GEMM
         if quantized_compute or quantized_output or quantized_grad_input:
-            tols = dtype_tols(tex.DType.kFloat8E4M3)
+            tols = quantization_tols(quantization)
 
         # Check results
         y_test = y_test.to(dtype=torch.float64, device="cpu")
@@ -1010,7 +1034,7 @@ class TestBasicOps:
         out_shape = in_shape[:-1] + [out_features]
 
         # Skip invalid configurations
-        maybe_skip_quantization(quantization, dims=in_shape, device=device)
+        maybe_skip_quantization(quantization, dims=in_shape, device=device, dtype=dtype)
         maybe_skip_quantization(quantization, dims=out_shape)
         if quantization is None and (quantized_compute or quantized_weight):
             pytest.skip("Quantization scheme is not specified")
@@ -1077,7 +1101,7 @@ class TestBasicOps:
         if dtype == torch.float32:
             tols = dtype_tols(torch.float16)  # TF32 GEMM
         if quantized_compute:
-            tols = dtype_tols(tex.DType.kFloat8E4M3)
+            tols = quantization_tols(quantization)
 
         # Check results
         y_test = y_test.to(dtype=torch.float64, device="cpu")
@@ -1114,7 +1138,7 @@ class TestBasicOps:
         in_shape = list(in_shape)[:-1] + list(weight_shape)
 
         # Skip invalid configurations
-        maybe_skip_quantization(quantization, dims=in_shape, device=device)
+        maybe_skip_quantization(quantization, dims=in_shape, device=device, dtype=dtype)
 
         # Random data
         x_ref, x_test = make_reference_and_test_tensors(
@@ -1175,7 +1199,7 @@ class TestBasicOps:
         # Expected numerical error
         tols = dtype_tols(dtype)
         if quantized_compute:
-            tols = dtype_tols(tex.DType.kFloat8E4M3)
+            tols = quantization_tols(quantization)
 
         # Check results
         y_test = y_test.to(dtype=torch.float64, device="cpu")
@@ -1284,7 +1308,7 @@ class TestBasicOps:
         in_shape = list(in_shape)[:-1] + list(weight_shape)
 
         # Skip invalid configurations
-        maybe_skip_quantization(quantization, dims=in_shape, device=device)
+        maybe_skip_quantization(quantization, dims=in_shape, device=device, dtype=dtype)
 
         # Random data
         x_ref, x_test = make_reference_and_test_tensors(
@@ -1337,7 +1361,7 @@ class TestBasicOps:
         # Expected numerical error
         tols = dtype_tols(dtype)
         if quantized_compute:
-            tols = dtype_tols(tex.DType.kFloat8E4M3)
+            tols = quantization_tols(quantization)
 
         # Check results
         y_test = y_test.to(dtype=torch.float64, device="cpu")
@@ -1417,7 +1441,7 @@ class TestBasicOps:
 
         # Skip invalid configurations
         with_quantization = quantization is not None
-        maybe_skip_quantization(quantization, dims=in_shape, device=device)
+        maybe_skip_quantization(quantization, dims=in_shape, device=device, dtype=dtype)
 
         # Random data
         x1_ref, x1_test = make_reference_and_test_tensors(
@@ -1456,8 +1480,11 @@ class TestBasicOps:
 
         # Check results
         tols = dtype_tols(dtype)
-        if with_quantization:
-            tols = dtype_tols(x1_test._fp8_dtype)
+        if in_place:
+            if quantization in ("fp8_delayed_scaling", "fp8_current_scaling", "mxfp8"):
+                tols = dtype_tols(x1_test._fp8_dtype)
+            elif quantization == "nvfp4":
+                tols = dtype_tols(x1_test._fp4_dtype)
         y_test = y_test.to(dtype=torch.float64, device="cpu")
         dx1_test = x1_test.grad.to(dtype=torch.float64, device="cpu")
         dx2_test = x2_test.grad.to(dtype=torch.float64, device="cpu")
@@ -1486,7 +1513,7 @@ class TestBasicOps:
 
         # Skip invalid configurations
         with_quantization = quantization is not None
-        maybe_skip_quantization(quantization, dims=in_shape, device=device)
+        maybe_skip_quantization(quantization, dims=in_shape, device=device, dtype=dtype)
 
         # Random data
         x_ref, x_test = make_reference_and_test_tensors(
@@ -1559,7 +1586,7 @@ class TestBasicOps:
 
         # Skip invalid configurations
         quantized_compute = quantization is not None
-        maybe_skip_quantization(quantization, dims=in_shape, device=device)
+        maybe_skip_quantization(quantization, dims=in_shape, device=device, dtype=dtype)
         if cache_quantized_input:
             maybe_skip_quantization("fp8_current_scaling", device=device)
 
@@ -1633,8 +1660,10 @@ class TestBasicOps:
 
         # Expected numerical error
         tols = dtype_tols(dtype)
-        if quantized_compute or cache_quantized_input:
-            tols = dtype_tols(tex.DType.kFloat8E4M3)
+        if quantized_compute:
+            tols = quantization_tols(quantization)
+        elif cache_quantized_input:
+            tols = quantization_tols("fp8_current_scaling")
 
         # Check results
         y_test = y_test.to(dtype=torch.float64, device="cpu")
@@ -1665,7 +1694,7 @@ class TestBasicOps:
         quantized_compute = quantization is not None
         if not quantized_compute and (quantize_forward or quantize_backward):
             pytest.skip("Quantization scheme has not been provided")
-        maybe_skip_quantization(quantization, dims=in_shape, device=device)
+        maybe_skip_quantization(quantization, dims=in_shape, device=device, dtype=dtype)
 
         # Random data
         x_ref, x_test = make_reference_and_test_tensors(
@@ -1699,7 +1728,7 @@ class TestBasicOps:
         # Expected numerical error
         tols = dtype_tols(dtype)
         if quantized_compute:
-            tols = dtype_tols(tex.DType.kFloat8E4M3)
+            tols = quantization_tols(quantization)
 
         # Check results
         y_test = y_test.to(dtype=torch.float64, device="cpu")
@@ -1749,25 +1778,44 @@ class TestBasicOps:
         torch.testing.assert_close(y_test, y_ref, **tols)
         torch.testing.assert_close(dx_test, x_ref.grad, **tols)
 
-    @pytest.mark.parametrize("prob", (0.1, 0.5, 0.75))
+    @pytest.mark.parametrize("prob", (0.0625, 0.5, 0.75))
     @pytest.mark.parametrize("is_training", (True, False))
-    @pytest.mark.parametrize("shape", ((101,), (2, 4, 16)))
+    @pytest.mark.parametrize("quantization", (None, "fp8_current_scaling"))
+    @pytest.mark.parametrize("shape", ((101,), (2, 4, 16), (128, 128)))
     @pytest.mark.parametrize("dtype", _dtypes)
     def test_dropout(
         self,
         *,
         prob: float,
         is_training: bool,
+        quantization: Optional[str],
         shape: Iterable[int],
         dtype: torch.dtype,
         device: torch.device = "cuda",
     ):
 
+        # Skip invalid configurations
+        quantized_input = quantization is not None
+        maybe_skip_quantization(quantization, dims=shape, device=device, dtype=dtype)
+
         # Random data
-        x_ref = torch.rand(shape, dtype=dtype, device=device) + 0.5
-        x_test = x_ref.clone().requires_grad_()
-        dy_ref = torch.rand(shape, dtype=dtype, device=device) + 0.5
-        dy_test = dy_ref.clone()
+        # Note: Shift values to make sure inputs are non-zero
+        x_ref, x_test = make_reference_and_test_tensors(
+            shape,
+            quantization=quantization,
+            test_dtype=dtype,
+            test_device=device,
+            test_is_quantized=quantized_input,
+        )
+        with torch.no_grad():
+            x_test += 1
+            x_ref.copy_(x_test)
+        dy_ref, dy_test = make_reference_and_test_tensors(
+            shape,
+            test_dtype=dtype,
+            test_device=device,
+            requires_grad=False,
+        )
 
         # Apply dropout
         op = te_ops.Dropout(prob)
@@ -1775,17 +1823,20 @@ class TestBasicOps:
             op.train()
         else:
             op.eval()
-        y = op(x_test)
-        y.backward(dy_test)
+        y_test = op(x_test)
+        y_test.backward(dy_test)
 
         # Check values
+        y_test = y_test.to(dtype=torch.float64, device="cpu")
+        dx_test = x_test.grad.to(dtype=torch.float64, device="cpu")
         if is_training:
-            mask = ((y != 0) / (1 - prob)).to(dtype=dtype)
-            torch.testing.assert_close(y, x_ref * mask)
-            torch.testing.assert_close(x_test.grad, dy_ref * mask)
+            tols = dtype_tols(dtype)
+            mask = ((y_test != 0) / (1 - prob)).to(dtype=dtype)
+            torch.testing.assert_close(y_test, x_ref * mask, **tols)
+            torch.testing.assert_close(dx_test, dy_ref * mask, **tols)
         else:
-            torch.testing.assert_close(y, x_ref, rtol=0, atol=0)
-            torch.testing.assert_close(x_test.grad, dy_ref, rtol=0, atol=0)
+            torch.testing.assert_close(y_test, x_ref, rtol=0, atol=0)
+            torch.testing.assert_close(dx_test, dy_ref, rtol=0, atol=0)
 
         # Hypothesis testing for number of zeros
         # Note: A Bernoulli random variable with probability p has
@@ -1797,9 +1848,11 @@ class TestBasicOps:
         # p-value is less than 1% and we assume that the dropout
         # distribution is incorrect.
         if is_training:
-            prob_observed = 1 - torch.count_nonzero(y).item() / y.numel()
-            z_score = (prob_observed - prob) / math.sqrt(prob * (1 - prob) / y.numel())
-            assert abs(z_score) < 2.5758, "Number of zeros is outside 99% confidence interval"
+            prob_observed = 1 - torch.count_nonzero(y_test).item() / y_test.numel()
+            z_score = (prob_observed - prob) / math.sqrt(prob * (1 - prob) / y_test.numel())
+            assert (
+                abs(z_score) < 2.5758
+            ), f"Number of zeros is outside 99% confidence interval ({prob=}, {prob_observed=})"
 
 
 class TestFusedOps:
@@ -1834,7 +1887,7 @@ class TestFusedOps:
 
         # Skip invalid configurations
         quantized_compute = quantization is not None
-        maybe_skip_quantization(quantization, dims=in_shape, device=device)
+        maybe_skip_quantization(quantization, dims=in_shape, device=device, dtype=dtype)
         maybe_skip_quantization(quantization, dims=out_shape)
         if dtype not in (torch.float16, torch.bfloat16):
             pytest.skip(
@@ -1905,7 +1958,7 @@ class TestFusedOps:
         if dtype == torch.float32:
             tols = dtype_tols(torch.float16)  # TF32 GEMM
         if quantized_compute:
-            tols = dtype_tols(tex.DType.kFloat8E4M3)
+            tols = quantization_tols(quantization)
 
         # Check results
         y_test = y_test.to(dtype=torch.float64, device="cpu")
@@ -1941,7 +1994,7 @@ class TestFusedOps:
 
         # Skip invalid configurations
         quantized_compute = quantization is not None
-        maybe_skip_quantization(quantization, dims=in_shape, device=device)
+        maybe_skip_quantization(quantization, dims=in_shape, device=device, dtype=dtype)
         maybe_skip_quantization(quantization, dims=out_shape)
         if quantized_compute and dtype not in (torch.float16, torch.bfloat16):
             pytest.skip("FP8 GEMM is only supported with FP8, FP16, or BF16 output")
@@ -2016,7 +2069,7 @@ class TestFusedOps:
         if dtype == torch.float32:
             tols = dtype_tols(torch.float16)  # TF32 GEMM
         if quantized_compute:
-            tols = dtype_tols(tex.DType.kFloat8E4M3)
+            tols = quantization_tols(quantization)
 
         # Check results
         y_test = y_test.to(dtype=torch.float64, device="cpu")
@@ -2054,7 +2107,7 @@ class TestFusedOps:
 
         # Skip invalid configurations
         quantized_compute = quantization is not None
-        maybe_skip_quantization(quantization, dims=in_shape, device=device)
+        maybe_skip_quantization(quantization, dims=in_shape, device=device, dtype=dtype)
         maybe_skip_quantization(quantization, dims=out_shape)
         if quantized_compute and dtype not in (torch.float16, torch.bfloat16):
             pytest.skip("FP8 GEMM is only supported with FP8, FP16, or BF16 output")
@@ -2122,7 +2175,7 @@ class TestFusedOps:
         if dtype == torch.float32:
             tols = dtype_tols(torch.float16)  # TF32 GEMM
         if quantized_compute:
-            tols = dtype_tols(tex.DType.kFloat8E4M3)
+            tols = quantization_tols(quantization)
 
         # Check results
         y_test = y_test.to(dtype=torch.float64, device="cpu")
@@ -2155,7 +2208,7 @@ class TestFusedOps:
 
         # Skip invalid configurations
         with_quantization = quantization is not None
-        maybe_skip_quantization(quantization, device=device)
+        maybe_skip_quantization(quantization, device=device, dtype=dtype)
         if quantization == "mxfp8" and (len(in_shape) < 2 or in_shape[-1] % 32 != 0):
             pytest.skip("Unsupported tensor size for MXFP8")
 
@@ -2217,7 +2270,7 @@ class TestFusedOps:
         # Expected numerical error
         tols = dtype_tols(dtype)
         if with_quantization:
-            tols = dtype_tols(tex.DType.kFloat8E4M3)
+            tols = quantization_tols(quantization)
 
         # Check results
         y_test = y_test.to(dtype=torch.float64, device="cpu")
@@ -2336,7 +2389,7 @@ class TestFusedOps:
 
         # Skip invalid configurations
         quantized_compute = quantization is not None
-        maybe_skip_quantization(quantization, dims=in_shape, device=device)
+        maybe_skip_quantization(quantization, dims=in_shape, device=device, dtype=dtype)
         maybe_skip_quantization(quantization, dims=out_shape)
         if quantized_compute and dtype not in (torch.float16, torch.bfloat16):
             pytest.skip("FP8 GEMM is only supported with FP8, FP16, or BF16 output")
@@ -2404,7 +2457,7 @@ class TestFusedOps:
         if dtype == torch.float32:
             tols = dtype_tols(torch.float16)  # TF32 GEMM
         if quantized_compute:
-            tols = dtype_tols(tex.DType.kFloat8E4M3)
+            tols = quantization_tols(quantization)
 
         # Check results
         y1_test = y1_test.to(dtype=torch.float64, device="cpu")
@@ -2439,7 +2492,7 @@ class TestFusedOps:
 
         # Skip invalid configurations
         quantized_compute = quantization is not None
-        maybe_skip_quantization(quantization, dims=in_shape, device=device)
+        maybe_skip_quantization(quantization, dims=in_shape, device=device, dtype=dtype)
         maybe_skip_quantization(quantization, dims=out_shape)
         if quantized_compute and dtype not in (torch.float16, torch.bfloat16):
             pytest.skip("FP8 GEMM is only supported with FP8, FP16, or BF16 output")
@@ -2499,7 +2552,7 @@ class TestFusedOps:
         if dtype == torch.float32:
             tols = dtype_tols(torch.float16)  # TF32 GEMM
         if quantized_compute:
-            tols = dtype_tols(tex.DType.kFloat8E4M3)
+            tols = quantization_tols(quantization)
 
         # Check results
         y_test = y_test.to(dtype=torch.float64, device="cpu")
@@ -2540,7 +2593,7 @@ class TestCheckpointing:
 
         # Skip invalid configurations
         quantized_compute = quantization is not None
-        maybe_skip_quantization(quantization, dims=in_shape, device=device)
+        maybe_skip_quantization(quantization, dims=in_shape, device=device, dtype=dtype)
         maybe_skip_quantization(quantization, dims=out_shape)
 
         # Construct model
@@ -2666,7 +2719,7 @@ class TestSequentialModules:
         ffn_shape = in_shape[:-1] + (ffn_hidden_size,)
 
         # Skip invalid configurations
-        maybe_skip_quantization(quantization, dims=in_shape, device=device)
+        maybe_skip_quantization(quantization, dims=in_shape, device=device, dtype=dtype)
         maybe_skip_quantization(quantization, dims=ffn_shape, device=device)
         quantization_needed = quantized_compute or quantized_weight
         if quantization is None and quantization_needed:

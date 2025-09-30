@@ -13,6 +13,7 @@ from typing import Any, Optional
 import torch
 
 from ...cpp_extensions import general_gemm
+from ...cpu_offload import is_cpu_offload_enabled, mark_activation_offload
 from ...distributed import (
     CudaRNGStatesTracker,
     gather_along_first_dim,
@@ -925,6 +926,7 @@ class BasicLinear(BasicOperation):
             input_quantizer.set_usage(rowwise=True, columnwise=weight_requires_grad)
             weight_quantizer.set_usage(rowwise=True, columnwise=False)
 
+            # Recipe-specific configuration
             recipe = FP8GlobalStateManager.get_fp8_recipe()
             if recipe.float8_current_scaling():
                 input_quantizer.force_pow_2_scales = recipe.fp8_quant_fwd_inp.power_2_scale
@@ -933,6 +935,13 @@ class BasicLinear(BasicOperation):
                 weight_quantizer.amax_epsilon_scales = recipe.fp8_quant_fwd_inp.amax_epsilon
                 grad_output_quantizer.force_pow_2_scales = recipe.fp8_quant_fwd_inp.power_2_scale
                 grad_output_quantizer.amax_epsilon_scales = recipe.fp8_quant_fwd_inp.amax_epsilon
+                if self.sequence_parallel and self.tensor_parallel_mode == "column":
+                    input_quantizer.with_amax_reduction = True
+                    input_quantizer.amax_reduction_group = self.tensor_parallel_group
+                if self.sequence_parallel and self.tensor_parallel_mode == "row":
+                    grad_output_quantizer.with_amax_reduction = True
+                    grad_output_quantizer.amax_reduction_group = self.tensor_parallel_group
+            if recipe.nvfp4():
                 if self.sequence_parallel and self.tensor_parallel_mode == "column":
                     input_quantizer.with_amax_reduction = True
                     input_quantizer.amax_reduction_group = self.tensor_parallel_group
@@ -964,6 +973,8 @@ class BasicLinear(BasicOperation):
 
         # Save state for backward pass
         if ctx.requires_grad:
+            if is_cpu_offload_enabled():
+                mark_activation_offload(x_local)
             ctx.save_for_backward(x_local, w)
             ctx.with_quantized_compute = with_quantized_compute
             ctx.input_quantizer = input_quantizer

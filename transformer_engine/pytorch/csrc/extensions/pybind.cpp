@@ -32,6 +32,9 @@ PyTypeObject *MXFP8QuantizerClass = nullptr;
 PyTypeObject *Float8BlockwiseQTensorPythonClass = nullptr;
 PyTypeObject *Float8BlockwiseQTensorBasePythonClass = nullptr;
 PyTypeObject *Float8BlockwiseQuantizerClass = nullptr;
+PyTypeObject *NVFP4TensorPythonClass = nullptr;
+PyTypeObject *NVFP4TensorBasePythonClass = nullptr;
+PyTypeObject *NVFP4QuantizerClass = nullptr;
 
 void init_float8_extension() {
   if (Float8TensorPythonClass) return;
@@ -86,10 +89,26 @@ void init_float8blockwise_extension() {
              "Internal error: could not initialize pyTorch float8blockwise extension.");
 }
 
+void init_nvfp4_extensions() {
+  if (NVFP4TensorPythonClass) return;
+  auto nvfp4_module = py::module_::import("transformer_engine.pytorch.tensor.nvfp4_tensor");
+  NVFP4QuantizerClass = reinterpret_cast<PyTypeObject *>(
+      PyObject_GetAttrString(nvfp4_module.ptr(), "NVFP4Quantizer"));
+  NVFP4TensorPythonClass =
+      reinterpret_cast<PyTypeObject *>(PyObject_GetAttrString(nvfp4_module.ptr(), "NVFP4Tensor"));
+  auto nvfp4_base_module =
+      py::module_::import("transformer_engine.pytorch.tensor._internal.nvfp4_tensor_base");
+  NVFP4TensorBasePythonClass = reinterpret_cast<PyTypeObject *>(
+      PyObject_GetAttrString(nvfp4_base_module.ptr(), "NVFP4TensorBase"));
+  NVTE_CHECK(NVFP4TensorPythonClass != nullptr,
+             "Internal error: could not initialize pyTorch NVFP4 extension.");
+}
+
 void init_extension() {
   init_float8_extension();
   init_mxfp8_extension();
   init_float8blockwise_extension();
+  init_nvfp4_extensions();
 }
 
 }  // namespace transformer_engine::pytorch
@@ -278,6 +297,10 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
         "Fused Apply RoPE FWD", py::call_guard<py::gil_scoped_release>());
   m.def("fused_rope_backward", &transformer_engine::pytorch::fused_rope_backward,
         "Fused Apply RoPE BWD", py::call_guard<py::gil_scoped_release>());
+  m.def("fused_qkv_rope_forward", &transformer_engine::pytorch::fused_qkv_rope_forward,
+        "Fused Apply QKV RoPE FWD", py::call_guard<py::gil_scoped_release>());
+  m.def("fused_qkv_rope_backward", &transformer_engine::pytorch::fused_qkv_rope_backward,
+        "Fused Apply QKV RoPE BWD", py::call_guard<py::gil_scoped_release>());
 
   // fused router
   m.def("fused_topk_with_score_function_fwd",
@@ -304,6 +327,13 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
   m.def("fused_moe_aux_loss_bwd", &transformer_engine::pytorch::fused_moe_aux_loss_bwd,
         py::arg("Const_buf"), py::arg("tokens_per_expert"), py::arg("num_rows"),
         py::arg("num_cols"), py::arg("grad_aux_loss"), "Fused aux loss bwd");
+
+  // Dropout
+  m.def("dropout_fwd", transformer_engine::pytorch::dropout_fwd, "Dropout forward with 8-bit RNG",
+        py::arg("input"), py::arg("dropout_probability"), py::arg("out") = std::nullopt);
+  m.def("dropout_bwd", transformer_engine::pytorch::dropout_bwd, "Dropout backward with 8-bit RNG",
+        py::arg("grad_output"), py::arg("mask"), py::arg("dropout_probability"),
+        py::arg("grad_input") = std::nullopt);
 
   // Misc
   m.def("get_cublasLt_version", &transformer_engine::pytorch::get_cublasLt_version,
