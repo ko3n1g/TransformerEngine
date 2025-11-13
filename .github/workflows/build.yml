@@ -38,12 +38,6 @@ jobs:
     steps:
       - name: "Checkout"
         uses: actions/checkout@v3
-      - name: "Dependencies"
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y git python3.9 pip cudnn9-cuda-12
-          pip install cmake torch ninja pydantic importlib-metadata>=1.0 packaging pybind11 numpy einops onnxscript nvidia-mathdx==25.1.1
-
       - name: "Build PyTorch Wheel"
         uses: ./.github/actions/build-pytorch-wheel
         id: build-pytorch-wheel
@@ -57,9 +51,6 @@ jobs:
         env:
           NVTE_FRAMEWORK: pytorch
           MAX_JOBS: 1
-
-      - name: "Build"
-        run: pip install --no-build-isolation dist/${{ steps.build-pytorch-wheel.outputs.wheel_name }} -v --no-deps
 
       - name: "Sanity check"
         run: python3 tests/pytorch/test_sanity_import.py
