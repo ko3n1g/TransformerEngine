@@ -53,6 +53,7 @@ runs:
         root-reserve-mb: 5120
         temp-reserve-mb: 32
         swap-size-mb: 10240
+        build-mount-path: /usr/local
         remove-dotnet: "true"
         remove-android: "true"
         remove-haskell: "true"
