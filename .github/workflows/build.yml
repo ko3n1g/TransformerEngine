@@ -38,7 +38,7 @@ jobs:
     steps:
       - name: "Checkout"
         uses: actions/checkout@v3
-      - name: 'Dependencies'
+      - name: "Dependencies"
         run: |
           apt-get update
           apt-get install -y git python3.9 pip cudnn9-cuda-12
@@ -70,10 +70,9 @@ jobs:
       image: ghcr.io/nvidia/jax:jax
       options: --user root
     steps:
-
-        - name: 'Dependencies'
+      - name: "Dependencies"
         run: pip install pybind11[global] nvidia-mathdx==25.1.1
-      - name: 'Checkout'
+      - name: "Checkout"
         uses: actions/checkout@v3
         with:
           submodules: recursive
@@ -93,7 +92,7 @@ jobs:
     steps:
       - name: "Dependencies"
         run: pip install torch pybind11[global] einops onnxscript nvidia-mathdx==25.1.1
-      - name: 'Checkout'
+      - name: "Checkout"
         uses: actions/checkout@v3
         with:
           submodules: recursive
