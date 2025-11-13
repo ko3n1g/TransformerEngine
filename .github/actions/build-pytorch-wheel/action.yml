@@ -47,21 +47,16 @@ runs:
         echo "WHEEL_CUDA_VERSION=$(echo ${{ inputs.cuda-version }} | awk -F \. {'print $1'})" >> $GITHUB_ENV
         echo "MATRIX_PYTHON_VERSION=$(echo ${{ inputs.python-version }} | awk -F \. {'print $1 $2'})" >> $GITHUB_ENV
 
-    - name: Free up disk space
-      shell: bash -euxo pipefail {0}
-      if: ${{ runner.os == 'Linux' }}
-      # https://github.com/easimon/maximize-build-space/blob/master/action.yml
-      # https://github.com/easimon/maximize-build-space/tree/test-report
-      run: |
-        sudo rm -rf /usr/share/dotnet
-        sudo rm -rf /opt/ghc
-        sudo rm -rf /opt/hostedtoolcache/CodeQL
-
-    # - name: Set up swap space
-    #   if: runner.os == 'Linux'
-    #   uses: pierotofy/set-swap-space@v1.0
-    #   with:
-    #     swap-size-gb: 10
+    - name: Maximize build space
+      uses: easimon/maximize-build-space@master
+      with:
+        root-reserve-mb: 5120
+        temp-reserve-mb: 32
+        swap-size-mb: 10240
+        remove-dotnet: "true"
+        remove-android: "true"
+        remove-haskell: "true"
+        remove-codeql: "true"
 
     - name: Install CUDA ${{ inputs.cuda-version }}
       if: ${{ inputs.cuda-version != 'cpu' }}
