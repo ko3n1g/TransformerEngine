@@ -11,6 +11,7 @@ ARG PYTHON_VERSION=3.12
 ARG TORCH_VERSION=2.9.1
 ARG CUDA_VERSION=12.9.1
 ARG CUDNN_MAJOR_VERSION=9
+ENV PATH=/opt/venv/bin:$PATH
 
 # Install Python
 RUN apt-get update && \
@@ -18,9 +19,8 @@ RUN apt-get update && \
     add-apt-repository ppa:deadsnakes/ppa -y && \
     apt-get install -y python$PYTHON_VERSION-dev python$PYTHON_VERSION-venv python3-pip && \
     python$PYTHON_VERSION -m venv /opt/venv && \
-    /opt/venv/bin/pip install wheel packaging nvidia-mathdx ninja
+    pip install wheel packaging nvidia-mathdx ninja pybind11
 
-ENV PATH=/opt/venv/bin:$PATH
 
 # Install cuda-toolkit
 RUN CUDA_MAJOR_VERSION=$(echo $CUDA_VERSION | awk -F \. {'print $1'}) && \
@@ -36,9 +36,9 @@ RUN CUDA_MAJOR_VERSION=$(echo $CUDA_VERSION | awk -F \. {'print $1'}) && \
 # Install PyTorch
 RUN export MATRIX_CUDA_VERSION=$(echo $CUDA_VERSION | awk -F \. {'print $1 $2'}) && \
     export MATRIX_TORCH_VERSION=$(echo $TORCH_VERSION | awk -F \. {'print $1 "." $2'}) && \
-    export TORCH_CUDA_VERSION=$(/opt/venv/bin/python -c "from os import environ as env; \ 
+    export TORCH_CUDA_VERSION=$(python -c "from os import environ as env; \ 
     minv = {'2.5': 118, '2.6': 118, '2.7': 118, '2.8': 126, '2.9': 126}[env['MATRIX_TORCH_VERSION']]; \
     maxv = {'2.5': 124, '2.6': 126, '2.7': 128, '2.8': 129, '2.9': 130}[env['MATRIX_TORCH_VERSION']]; \
     print(minv if int(env['MATRIX_CUDA_VERSION']) < 120 else maxv)" \
     ) && \
-    /opt/venv/bin/pip install --no-cache-dir torch==${TORCH_VERSION} --index-url https://download.pytorch.org/whl/cu${TORCH_CUDA_VERSION}
+    pip install --no-cache-dir torch==${TORCH_VERSION} --index-url https://download.pytorch.org/whl/cu${TORCH_CUDA_VERSION}
