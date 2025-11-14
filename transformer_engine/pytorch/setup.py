@@ -75,21 +75,29 @@ def get_platform():
 
 def get_wheel_url():
     """Construct the wheel URL for the current platform."""
-    torch_version_raw = parse(torch.__version__)
     python_version = f"cp{sys.version_info.major}{sys.version_info.minor}"
     platform_name = get_platform()
     nvte_version = te_version()
-    torch_version = f"{torch_version_raw.major}.{torch_version_raw.minor}"
     cxx11_abi = str(torch._C._GLIBCXX_USE_CXX11_ABI).upper()
 
     # Determine the version numbers that will be used to determine the correct wheel
     # We're using the CUDA version used to build torch, not the one currently installed
     # _, cuda_version_raw = get_cuda_bare_metal_version(CUDA_HOME)
     torch_cuda_version = parse(torch.version.cuda)
-    # For CUDA 11, we only compile for CUDA 11.8, and for CUDA 12 we only compile for CUDA 12.3
+    # For CUDA 12 we only compile for CUDA 12.3
     # to save CI time. Minor versions should be compatible.
-    torch_cuda_version = parse("11.8") if torch_cuda_version.major == 11 else parse("12.3")
-    # cuda_version = f"{cuda_version_raw.major}{cuda_version_raw.minor}"
+    if torch_cuda_version.major == 12:
+        torch_cuda_version = parse("12.3")
+    elif torch_cuda_version.major == 13:
+        torch_cuda_version = parse("13.0")
+    else:
+        raise ValueError(f"CUDA version {torch_cuda_version} not supported")
+
+    if os.environ.get("NVIDIA_PRODUCT_NAME", "") == "PyTorch":
+        torch_version = str(os.environ.get("NVIDIA_PYTORCH_VERSION"))
+    else:
+        torch_version = f"{torch.__version__}"
+
     cuda_version = f"{torch_cuda_version.major}"
 
     # Determine wheel URL based on CUDA version, torch version, python version and OS
@@ -110,7 +118,7 @@ class CachedWheelsCommand(_bdist_wheel):
 
     def run(self):
         if FORCE_BUILD:
-            super().run()
+            return super().run()
 
         wheel_url, wheel_filename = get_wheel_url()
         print("Guessing wheel URL: ", wheel_url)
@@ -132,7 +140,7 @@ class CachedWheelsCommand(_bdist_wheel):
         except (urllib.error.HTTPError, urllib.error.URLError):
             print("Precompiled wheel not found. Building from source...")
             # If the wheel could not be downloaded, build from source
-            super().run()
+            return super().run()
 
 
 if __name__ == "__main__":
