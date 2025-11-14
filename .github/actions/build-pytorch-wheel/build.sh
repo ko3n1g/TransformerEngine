@@ -16,7 +16,7 @@ timeout 5h python setup.py bdist_wheel --dist-dir=dist || EXIT_CODE=$?
 if [ $EXIT_CODE -eq 0 ]; then
     wheel_name=$(python -c "import setup; print(setup.get_wheel_url()[1])" | tail -n 1)
     ls dist/*whl |xargs -I {} mv {} dist/${wheel_name}
-    echo "wheel_name=${wheel_name}" | tee -a "$GITHUB_OUTPUT"
+    echo "wheel_name=${wheel_name}" >> $GITHUB_ENV
 fi
 
 echo $EXIT_CODE
