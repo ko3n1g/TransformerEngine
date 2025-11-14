@@ -20,6 +20,9 @@ inputs:
   cxx11_abi:
     description: "Enable torch flag C++11 ABI (TRUE/FALSE)"
     required: true
+  base-image:
+    description: "The base image to use for the build"
+    required: false
 outputs:
   wheel_name:
     description: "The name of the built wheel"
@@ -56,19 +59,26 @@ runs:
 
     - name: Build image
       shell: bash -euxo pipefail {0}
+      env: BASE_IMAGE=${{ inputs.base-image }}
       run: |
-        docker build \
-          -t transformer-engine-build \
-          -f ${{ github.action_path }}/Dockerfile \
-          --build-arg PYTHON_VERSION=${{ inputs.python-version }} \
-          --build-arg TORCH_VERSION=${{ inputs.torch-version }} \
-          --build-arg CUDA_VERSION=${{ inputs.cuda-version }} \
-          --build-arg CUDNN_MAJOR_VERSION=${{ inputs.cudnn-version }} \
-          .
-
+        if [ -z "${BASE_IMAGE}" ]; then
+          docker build \
+            -t transformer-engine-build \
+            -f ${{ github.action_path }}/Dockerfile \
+            --build-arg PYTHON_VERSION=${{ inputs.python-version }} \
+            --build-arg TORCH_VERSION=${{ inputs.torch-version }} \
+            --build-arg CUDA_VERSION=${{ inputs.cuda-version }} \
+            --build-arg CUDNN_MAJOR_VERSION=${{ inputs.cudnn-version }} \
+            .
+        else
+          docker pull ${BASE_IMAGE}
+          docker tag ${BASE_IMAGE} transformer-engine-build
+        fi
     - name: Build wheel
       shell: bash -euxo pipefail {0}
       id: build_wheel
+      env:
+        CXX11_ABI: ${{ inputs.cxx11_abi }}
       run: |
         echo ::group::Build wheel
 
@@ -79,6 +89,7 @@ runs:
             --volume $(pwd):/workspace \
             --volume $GITHUB_ENV:$GITHUB_ENV \
             -e PIP_CONSTRAINT= \
+            -e CXX11_ABI=$CXX11_ABI \
             -e GITHUB_ENV=$GITHUB_ENV \
             transformer-engine-build bash /workspace/.github/actions/build-pytorch-wheel/build.sh | tail -n 1)
 
