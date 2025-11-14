@@ -80,7 +80,7 @@ jobs:
       - name: Get Release with tag
         id: get_current_release
         uses: joutvhu/get-release@v1
-        if: ${{ github.event_name == 'release' }}
+        if: ${{ github.event_name == 'workflow_dispatch' }}
         with:
           tag_name: ${{ inputs.release-version }}
         env:
@@ -103,7 +103,7 @@ jobs:
     needs: pre-flight
     strategy:
       fail-fast: false
-      matrix: ${{ needs.pre-flight.outputs.build-wheel-matrix }}
+      matrix: ${{ fromJson(needs.pre-flight.outputs.build-wheel-matrix) }}
     steps:
       - name: "Checkout"
         uses: actions/checkout@v3
