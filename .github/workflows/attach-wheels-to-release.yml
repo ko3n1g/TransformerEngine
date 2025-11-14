@@ -40,7 +40,10 @@ on:
       cxx11_abi:
         description: "C++11 ABI"
         required: true
-        default: "FALSE"
+        default: "TRUE"
+        options:
+          - "TRUE"
+          - "FALSE"
 jobs:
   pre-flight:
     runs-on: ubuntu-latest
