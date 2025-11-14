@@ -98,6 +98,7 @@ runs:
             -e PIP_CONSTRAINT= \
             -e CXX11_ABI=$CXX11_ABI \
             -e GITHUB_ENV=$GITHUB_ENV \
+            -t \
             transformer-engine-build bash /workspace/build-tools/.github/actions/build-pytorch-wheel/build.sh | tail -n 1)
 
         # Do not fail the job if timeout killed the build
