@@ -19,8 +19,7 @@ RUN apt-get update && \
     apt-get install -y software-properties-common wget && \
     add-apt-repository ppa:deadsnakes/ppa -y && \
     apt-get install -y python$PYTHON_VERSION-dev python$PYTHON_VERSION-venv python3-pip && \
-    python$PYTHON_VERSION -m venv /opt/venv && \
-    pip install wheel packaging nvidia-mathdx ninja pybind11
+    python$PYTHON_VERSION -m venv /opt/venv
 
 
 # Install cuda-toolkit

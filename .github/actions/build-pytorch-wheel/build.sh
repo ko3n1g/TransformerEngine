@@ -4,6 +4,9 @@ set -eoxu pipefail
 
 export NVTE_NO_LOCAL_VERSION=1
 export FORCE_CXX11_ABI=$CXX11_ABI
+export PIP_CONSTRAINT=
+
+pip install wheel packaging nvidia-mathdx ninja pybind11
 
 # 5h timeout since GH allows max 6h and we want some buffer
 EXIT_CODE=0
