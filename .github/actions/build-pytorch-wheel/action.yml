@@ -92,7 +92,7 @@ runs:
         EXIT_CODE=$(docker run \
             --rm \
             --shm-size=64g \
-            --workdir /workspace \
+            --workdir /workspace/transformer_engine/pytorch \
             --volume $(pwd):/workspace \
             --volume $GITHUB_ENV:$GITHUB_ENV \
             -e PIP_CONSTRAINT= \
