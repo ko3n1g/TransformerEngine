@@ -18,7 +18,9 @@ RUN apt-get update && \
     add-apt-repository ppa:deadsnakes/ppa -y && \
     apt-get install -y python$PYTHON_VERSION-dev python$PYTHON_VERSION-venv python3-pip && \
     python$PYTHON_VERSION -m venv /opt/venv && \
-    /opt/venv/bin/pip install wheel packaging nvidia-mathdx
+    /opt/venv/bin/pip install wheel packaging nvidia-mathdx ninja
+
+ENV PATH=/opt/venv/bin:$PATH
 
 # Install cuda-toolkit
 RUN CUDA_MAJOR_VERSION=$(echo $CUDA_VERSION | awk -F \. {'print $1'}) && \
@@ -29,7 +31,7 @@ RUN CUDA_MAJOR_VERSION=$(echo $CUDA_VERSION | awk -F \. {'print $1'}) && \
     dpkg -i cuda-keyring_1.1-1_all.deb && \
     rm cuda-keyring_1.1-1_all.deb && \
     apt-get update && \
-    apt-get install -y cuda-toolkit-${CUDA_MAJOR_VERSION}-${CUDA_MINOR_VERSION} cudnn-cuda-$CUDA_MAJOR_VERSION libcudnn$CUDNN_MAJOR_VERSION-cuda-$CUDA_MAJOR_VERSION libnccl2 libnccl-dev
+    apt-get install -y cuda-toolkit-${CUDA_MAJOR_VERSION}-${CUDA_MINOR_VERSION} cudnn-cuda-$CUDA_MAJOR_VERSION libcudnn$CUDNN_MAJOR_VERSION-cuda-$CUDA_MAJOR_VERSION libnccl2 libnccl-dev cmake
 
 # Install PyTorch
 RUN export MATRIX_CUDA_VERSION=$(echo $CUDA_VERSION | awk -F \. {'print $1 $2'}) && \
