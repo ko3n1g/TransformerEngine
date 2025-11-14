@@ -164,7 +164,6 @@ jobs:
     name: Build Wheels for NGC PyTorch images
     runs-on: ${{ matrix.os }}
     needs: pre-flight
-    if: ${{ matrix.container-image != '' }}
     strategy:
       fail-fast: false
       matrix:
