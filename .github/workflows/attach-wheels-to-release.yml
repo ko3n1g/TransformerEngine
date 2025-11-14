@@ -75,7 +75,7 @@ jobs:
             }' | jq -rc)
           fi
 
-          echo "matrix=$MATRIX" | tee -a release_matrix.json
+          echo "matrix=$MATRIX" | tee -a "$GITHUB_OUTPUT""
 
       - name: Get Release with tag
         id: get_current_release
