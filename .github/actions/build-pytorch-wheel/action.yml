@@ -91,7 +91,6 @@ runs:
 
         EXIT_CODE=$(docker run \
             --rm \
-            -t \
             --shm-size=64g \
             --workdir /workspace \
             --volume $(pwd):/workspace \
