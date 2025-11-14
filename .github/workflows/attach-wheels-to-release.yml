@@ -151,7 +151,7 @@ jobs:
 
   build_wheels_for_ngc:
     name: Build Wheels for NGC PyTorch images
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     needs: pre-flight
     strategy:
       fail-fast: false
@@ -166,5 +166,4 @@ jobs:
         uses: ./.github/actions/build-pytorch-wheel
         id: build-pytorch-wheel
         with:
-          runs-on: ${{ matrix.os }}
           base-image: ${{ matrix.container-image }}

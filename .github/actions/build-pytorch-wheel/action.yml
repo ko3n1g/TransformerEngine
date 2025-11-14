@@ -61,7 +61,7 @@ runs:
       shell: bash -euxo pipefail {0}
       env: BASE_IMAGE=${{ inputs.base-image }}
       run: |
-        if [[ ${BASE_IMAGE}" == "" ]]; then
+        if [[ "${BASE_IMAGE}" == "" ]]; then
           docker build \
             -t transformer-engine-build \
             -f ${{ github.action_path }}/Dockerfile \
