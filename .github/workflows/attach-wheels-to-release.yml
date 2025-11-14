@@ -45,6 +45,11 @@ on:
         options:
           - "TRUE"
           - "FALSE"
+      ngc-image:
+        description: "NGC PyTorch image"
+        required: true
+        type: string
+        default: ""
 jobs:
   pre-flight:
     runs-on: ubuntu-latest
@@ -79,7 +84,7 @@ jobs:
               "torch-version": ["${{ inputs.torch-version }}"], 
               "cuda-version": ["${{ inputs.cuda-version }}"], 
               "cudnn-version": ["${{ inputs.cudnn-version }}"], 
-              "cxx11_abi": ["${{ inputs.cxx11_abi }}"]
+              "cxx11_abi": ["${{ inputs.cxx11_abi }}"],
             }' | jq -rc)
           fi
 
@@ -109,9 +114,15 @@ jobs:
       - name: Check for NGC PyTorch images
         id: check_for_ngc_images
         if: ${{ (success() || !failure()) && !cancelled()}}
+        env:
+          EVENT: ${{ github.event_name }}
         run: |
-          bash ./.github/scripts/check_for_ngc_images.sh
-          echo "IMAGES=$(cat ngc_images.json| jq -cr)" | tee -a $GITHUB_OUTPUT
+          if [[ "$EVENT" == "release" ]]; then
+            bash ./.github/scripts/check_for_ngc_images.sh
+            echo "IMAGES=$(cat ngc_images.json | jq -cr)" | tee -a $GITHUB_OUTPUT
+          else
+            echo 'IMAGES=["${{ inputs.ngc-image }}"]' | tee -a "$GITHUB_OUTPUT"
+          fi
 
   build_wheels:
     name: Build Wheel
