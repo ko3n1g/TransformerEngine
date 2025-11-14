@@ -51,16 +51,16 @@ runs:
       shell: bash -euxo pipefail {0}
       run: sudo sh -c "mv ${GITHUB_WORKSPACE}/docker/* /var/lib/docker"
 
-    - name: Checkout build tools
-      uses: actions/checkout@v4
-      with:
-        path: build-tools
-        submodules: recursive
-
     - name: Checkout
       uses: actions/checkout@v4
       with:
         ref: ${{ inputs.release-version }}
+        submodules: recursive
+
+    - name: Checkout build tools
+      uses: actions/checkout@v4
+      with:
+        path: build-tools
         submodules: recursive
 
     - name: Build image
