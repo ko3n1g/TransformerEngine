@@ -94,7 +94,7 @@ jobs:
       - name: Get release assets url
         env:
           EVENT: ${{ github.event_name }}
-        if: (success() || !failed()) && !cancelled()
+        if: ${{ (success() || !failure()) && !cancelled()}}
         id: release-assets-url
         run: |
           if [[ "$EVENT" == "release" ]]; then
@@ -105,7 +105,7 @@ jobs:
 
       - name: Check for NGC PyTorch images
         id: check_for_ngc_images
-        if: (success() || !failed()) && !cancelled()
+        if: ${{ (success() || !failure()) && !cancelled()}}
         run: |
           bash ./.github/scripts/check_for_ngc_images.sh
           echo "IMAGES=$(cat ngc_images.json| jq -cr)" | tee -a $GITHUB_OUTPUT
