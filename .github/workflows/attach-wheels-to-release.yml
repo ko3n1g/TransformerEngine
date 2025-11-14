@@ -180,3 +180,14 @@ jobs:
         id: build-pytorch-wheel
         with:
           base-image: ${{ matrix.container-image }}
+
+      - name: Upload Release Asset
+        id: upload_release_asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.pre-flight.outputs.release-assets-url }}
+          asset_path: ./dist/${{ steps.build-pytorch-wheel.outputs.wheel_name }}
+          asset_name: ${{ steps.build-pytorch-wheel.outputs.wheel_name }}
+          asset_content_type: application/*
