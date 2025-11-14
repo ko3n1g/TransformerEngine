@@ -46,10 +46,10 @@ on:
           - "TRUE"
           - "FALSE"
       ngc-image:
-        description: "NGC PyTorch image"
+        description: "NGC PyTorch image (will take precedence over the source build)"
         required: false
         type: string
-        default: "nvcr.io/nvidia/pytorch:25.09-py3"
+        default: ""
 jobs:
   pre-flight:
     runs-on: ubuntu-latest
