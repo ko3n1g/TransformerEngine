@@ -40,6 +40,7 @@ on:
       cxx11_abi:
         description: "C++11 ABI"
         required: true
+        type: choice
         default: "TRUE"
         options:
           - "TRUE"
