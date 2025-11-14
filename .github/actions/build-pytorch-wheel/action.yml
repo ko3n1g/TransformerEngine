@@ -51,6 +51,12 @@ runs:
       shell: bash -euxo pipefail {0}
       run: sudo sh -c "mv ${GITHUB_WORKSPACE}/docker/* /var/lib/docker"
 
+    - name: Checkout build tools
+      uses: actions/checkout@v4
+      with:
+        path: build-tools
+        submodules: recursive
+
     - name: Checkout
       uses: actions/checkout@v4
       with:
@@ -65,7 +71,7 @@ runs:
         if [[ "${BASE_IMAGE}" == "" ]]; then
           docker build \
             -t transformer-engine-build \
-            -f ${{ github.action_path }}/Dockerfile \
+            -f build-tools/.github/actions/build-pytorch-wheel/Dockerfile \
             --build-arg PYTHON_VERSION=${{ inputs.python-version }} \
             --build-arg TORCH_VERSION=${{ inputs.torch-version }} \
             --build-arg CUDA_VERSION=${{ inputs.cuda-version }} \
@@ -92,7 +98,7 @@ runs:
             -e PIP_CONSTRAINT= \
             -e CXX11_ABI=$CXX11_ABI \
             -e GITHUB_ENV=$GITHUB_ENV \
-            transformer-engine-build bash /workspace/.github/actions/build-pytorch-wheel/build.sh | tail -n 1)
+            transformer-engine-build bash /workspace/build-tools/.github/actions/build-pytorch-wheel/build.sh | tail -n 1)
 
         # Do not fail the job if timeout killed the build
         exit $EXIT_CODE
