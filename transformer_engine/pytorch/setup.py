@@ -87,7 +87,7 @@ def get_wheel_url():
     # For CUDA 12 we only compile for CUDA 12.3
     # to save CI time. Minor versions should be compatible.
     if torch_cuda_version.major == 12:
-        torch_cuda_version = parse("12.")
+        torch_cuda_version = parse("12.3")
     elif torch_cuda_version.major == 13:
         torch_cuda_version = parse("13.0")
     else:
