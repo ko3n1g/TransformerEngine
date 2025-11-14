@@ -94,10 +94,10 @@ runs:
             --shm-size=64g \
             --workdir /workspace/transformer_engine/pytorch \
             --volume $(pwd):/workspace \
-            --volume $GITHUB_ENV:$GITHUB_ENV \
+            --volume $GITHUB_OUTPUT:$GITHUB_OUTPUT \
             -e PIP_CONSTRAINT= \
             -e CXX11_ABI=$CXX11_ABI \
-            -e GITHUB_ENV=$GITHUB_ENV \
+            -e GITHUB_OUTPUT=$GITHUB_OUTPUT \
             transformer-engine-build bash /workspace/build-tools/.github/actions/build-pytorch-wheel/build.sh | tail -n 1)
 
         # Do not fail the job if timeout killed the build
