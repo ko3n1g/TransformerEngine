@@ -53,6 +53,9 @@ jobs:
       release-assets-url: ${{ steps.release-assets-url.outputs.upload_url }}
       ngc-images: ${{ steps.check_for_ngc_images.outputs.IMAGES }}
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
       - name: Build release matrix
         id: matrix
         env:
