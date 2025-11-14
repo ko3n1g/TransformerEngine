@@ -44,7 +44,6 @@ from ..quantize import (
     noop_quantizer_set,
     is_fp8_gemm_with_all_layouts_supported,
     apply_padding_to_scale_inv,
-    should_use_rht,
 )
 from .misc import get_padded_spec, is_all_reduce_in_float32
 from ..sharding import (
@@ -169,16 +168,13 @@ def _quantize_gemm_operands(lhs, rhs, lhs_quantizer, rhs_quantizer, contracting_
     assert not isinstance(lhs_q, ScaledTensor2x)
     assert not isinstance(rhs_q, ScaledTensor2x)
 
-    def uses_rht(q: AbstractBaseTensor) -> bool:
-        return isinstance(q, ScaledTensor1x) and should_use_rht(
-            q.scaling_mode, is_colwise=q.is_colwise
-        )
+    def has_rht_applied(q: AbstractBaseTensor) -> bool:
+        return isinstance(q, ScaledTensor1x) and q.has_rht_applied
 
-    # TODO(jberchtold): Move RHT usage check to a bool flag on the ScaledTensor class
-    assert uses_rht(lhs_q) == uses_rht(rhs_q), (
-        "With NVFP4_1D_SCALING, if one operand is colwise quantized, the other must be colwise"
-        " quantized as well. This is to ensure the RHT is applied to both and will cancel out in"
-        " the GEMM."
+    assert has_rht_applied(lhs_q) == has_rht_applied(rhs_q), (
+        "With NVFP4_1D_SCALING, if one operand is quantized with RHT, the other must be quantized"
+        " with RHT as well. This is to ensure the RHT is applied to both and will cancel out in the"
+        " GEMM."
     )
 
     return lhs_q, rhs_q
@@ -360,6 +356,28 @@ def swizzled_scale(scale_inv, flatten_axis, is_colwise):
     return swizzled.reshape(original_shape)
 
 
+def get_lhs_axis_boundary(lhs_cdims, is_transposed):
+    """Get the axis boundary for the LHS operand."""
+    return max(lhs_cdims) + 1 if is_transposed else min(lhs_cdims)
+
+
+def get_rhs_axis_boundary(rhs_cdims, is_transposed):
+    """Get the axis boundary for the RHS operand."""
+    return min(rhs_cdims) if is_transposed else max(rhs_cdims) + 1
+
+
+def assert_cublas_requirements(scaling_mode, contracting_size, tensor_name):
+    """Assert that the given tensor shape and layout meet the requirements for cuBLAS GEMM."""
+    if scaling_mode != ScalingMode.NO_SCALING:
+        # Requirements from https://docs.nvidia.com/cuda/cublas/#tensor-core-usage
+        alignment = 32 if scaling_mode.is_nvfp4_scaling else 16
+
+        assert contracting_size % alignment == 0, (
+            f"cuBLAS GEMM {tensor_name} tensor's contracting dimension must be a multiple of"
+            f" {alignment} when using quantized inputs. Got contracting_size={contracting_size}"
+        )
+
+
 class GemmPrimitive(BasePrimitive):
     """
     Primitive for cuBLAS GEMM
@@ -515,6 +533,9 @@ class GemmPrimitive(BasePrimitive):
 
         # Declare cuBLAS workspace
         workspace_size = get_cublas_workspace_size_bytes()
+        # NVFP4 swizzling happen in via nvte kernel instead of JAX transposes
+        if scaling_mode.is_nvfp4_scaling:
+            workspace_size += lhs_scale_inv.size + rhs_scale_inv.size
         if not collective_op.is_none:
             workspace_size *= get_cgemm_num_max_streams()
         # cuBLAS workspace ptr must be 256 bytes aligned but JAX buffers are not
@@ -560,11 +581,34 @@ class GemmPrimitive(BasePrimitive):
             (lhs_aval.ndim, rhs_aval.ndim), (lhs_cdims, rhs_cdims)
         )
 
+        lhs_axis_boundary = get_lhs_axis_boundary(lhs_cdims, lhs_transposed)
+        lhs_contracting_size = (
+            reduce(operator.mul, lhs_aval.shape[lhs_axis_boundary:])
+            if lhs_transposed
+            else reduce(operator.mul, lhs_aval.shape[:lhs_axis_boundary])
+        )
+        assert_cublas_requirements(
+            scaling_mode,
+            lhs_contracting_size,
+            "LHS",
+        )
+        rhs_axis_boundary = get_rhs_axis_boundary(rhs_cdims, rhs_transposed)
+        rhs_contracting_size = (
+            reduce(operator.mul, rhs_aval.shape[:rhs_axis_boundary])
+            if rhs_transposed
+            else reduce(operator.mul, rhs_aval.shape[rhs_axis_boundary:])
+        )
+        assert_cublas_requirements(
+            scaling_mode,
+            rhs_contracting_size,
+            "RHS",
+        )
+
         args = (lhs, lhs_scale_inv, rhs, rhs_scale_inv, bias, gelu_input, alpha, beta)
         kwargs = {
             "scaling_mode": int(scaling_mode.value),
-            "lhs_axis_boundary": max(lhs_cdims) + 1 if lhs_transposed else min(lhs_cdims),
-            "rhs_axis_boundary": min(rhs_cdims) if rhs_transposed else max(rhs_cdims) + 1,
+            "lhs_axis_boundary": get_lhs_axis_boundary(lhs_cdims, lhs_transposed),
+            "rhs_axis_boundary": get_rhs_axis_boundary(rhs_cdims, rhs_transposed),
             "lhs_transposed": lhs_transposed,
             "rhs_transposed": rhs_transposed,
             "fuse_bias": fuse_bias,
@@ -621,6 +665,8 @@ class GemmPrimitive(BasePrimitive):
             rhs_scale_inv = apply_padding_to_scale_inv(
                 rhs_scale_inv, scaling_mode, rhs.shape, not rhs_transposed, rhs_flatten_axis
             )
+        # Only perform JAX-based swizzle for MXFP8, NVFP4 swizzle will go though nvte kernel
+        if scaling_mode.is_mxfp8_scaling:
             lhs_scale_inv = swizzled_scale(lhs_scale_inv, lhs_flatten_axis, lhs_transposed)
             rhs_scale_inv = swizzled_scale(rhs_scale_inv, rhs_flatten_axis, not rhs_transposed)
 

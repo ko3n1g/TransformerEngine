@@ -29,24 +29,25 @@ except ImportError:
 
 import transformer_engine_torch as tex
 
+from transformer_engine.pytorch.triton.pad import pad_columnwise_scale_inv
 from . import torch_version
 from .utils import (
     is_non_tn_fp8_gemm_supported,
     safely_set_viewless_tensor_data,
     needs_quantized_gemm,
 )
+
 from .constants import dist_group_type
-from .fp8 import FP8GlobalStateManager, fp8_autocast
+from .quantization import FP8GlobalStateManager, autocast
 from .tensor.float8_tensor import Float8Quantizer, Float8Tensor, Float8CurrentScalingQuantizer
 from .tensor.mxfp8_tensor import MXFP8Quantizer
 from .tensor.nvfp4_tensor import NVFP4Quantizer
 from .tensor.float8_blockwise_tensor import Float8BlockQuantizer
-from .tensor.quantized_tensor import QuantizedTensorStorage, QuantizedTensor, Quantizer
+from .quantized_tensor import QuantizedTensorStorage, QuantizedTensor, Quantizer
 from .tensor.storage.float8_tensor_storage import Float8TensorStorage
 from .tensor.storage.mxfp8_tensor_storage import MXFP8TensorStorage
 from .tensor.storage.nvfp4_tensor_storage import NVFP4TensorStorage
 from .tensor.storage.float8_blockwise_tensor_storage import Float8BlockwiseQTensorStorage
-from .triton.pad import pad_columnwise_scale_inv
 from ..debug.pytorch.debug_quantization import DebugQuantizedTensor, DebugQuantizer
 
 
@@ -419,8 +420,8 @@ class _CheckpointFunction(torch.autograd.Function):
         detached_inputs = detach_variable(inputs)
         with torch.enable_grad(), ctx.recompute_ctx, ctx.torch_gpu_amp_ctx, ctx.torch_cpu_amp_ctx, activation_recompute_forward(
             activation_recompute=True, recompute_phase=True
-        ), fp8_autocast(
-            enabled=ctx.fp8, fp8_recipe=ctx.fp8_recipe
+        ), autocast(
+            enabled=ctx.fp8, recipe=ctx.fp8_recipe
         ):
             outputs = ctx.run_function(*detached_inputs, **ctx.kwargs)
 
@@ -754,8 +755,8 @@ def checkpoint(
     def recompute_fn(*args, **kwargs):
         with torch.autograd.enable_grad(), (
             te_recompute_ctx
-        ), user_recompute_ctx, torch_gpu_amp_forward_ctx, torch_cpu_amp_forward_ctx, fp8_autocast(
-            enabled=fp8, fp8_recipe=fp8_recipe
+        ), user_recompute_ctx, torch_gpu_amp_forward_ctx, torch_cpu_amp_forward_ctx, autocast(
+            enabled=fp8, recipe=fp8_recipe
         ):
             function(*args, **kwargs)
 
@@ -1885,6 +1886,43 @@ def allreduce(
     return inp, handle
 
 
+def _get_module_fsdp_state(module):
+    """
+    If module is an FSDP module, return its _FSDPState.
+    Otherwise, return the _FSDPState of the closest parent FSDP module
+    in the module hierarchy the module belongs to.
+    """
+
+    if hasattr(module, "_get_fsdp_state"):
+        # this will return correct fsdp state if module itself is an fsdp module
+        fsdp_state = module._get_fsdp_state()
+    elif getattr(module, "_te_cached_parent_fsdp_state", None) is not None:
+        # See if we have cached the parent fsdp state of the module
+        fsdp_state = module._te_cached_parent_fsdp_state
+    else:
+        from torch.distributed._composable_state import _module_state_mapping
+
+        # Otherwise get the fsdp state of lca of module in the module hierarchy
+        min_nodes_in_parent = float("inf")
+        closest_parent_fsdp_mod = None
+        for fsdp_mod in _module_state_mapping.keys():
+            all_submodules = list(fsdp_mod.modules())
+            for submodule in all_submodules:
+                if submodule is module:
+                    if min_nodes_in_parent > len(all_submodules):
+                        closest_parent_fsdp_mod = fsdp_mod
+                        min_nodes_in_parent = len(all_submodules)
+        if closest_parent_fsdp_mod is None:
+            raise RuntimeError(
+                "Module is not FSDP-wrapped and does not have any FSDP-wrapped parent modules."
+            )
+        fsdp_state = closest_parent_fsdp_mod._get_fsdp_state()
+        # Cache the parent fsdp state of the module to avoid recomputing
+        # the closest parent fsdp module.
+        module._te_cached_parent_fsdp_state = fsdp_state
+    return fsdp_state
+
+
 def _fsdp_scatter_tensors(
     fsdp_group: dist_group_type,
     *tensors: torch.Tensor,
@@ -1969,7 +2007,7 @@ def prepare_te_modules_for_fsdp(fsdp_root: torch.nn.Module) -> None:
         if hasattr(fsdp_root, "primary_weights_in_fp8"):
             assert not fsdp_root.primary_weights_in_fp8, (
                 "TE modules with primary weights in FP8 cannot be FSDP-wrapped. "
-                "Please initialize your model without the te.fp8_model_init(...) context."
+                "Please initialize your model without the te.quantized_model_init(...) context."
             )
         root_state = _get_module_fsdp_state(fsdp_root)
         assert root_state is not None, "Root module does not have a valid _FSDPState."
@@ -1982,7 +2020,7 @@ def prepare_te_modules_for_fsdp(fsdp_root: torch.nn.Module) -> None:
             if hasattr(fsdp_module.module, "primary_weights_in_fp8"):
                 assert not fsdp_module.module.primary_weights_in_fp8, (
                     "TE modules with primary weights in FP8 cannot be FSDP-wrapped. "
-                    "Please initialize your model without the te.fp8_model_init(...) context."
+                    "Please initialize your model without the te.quantized_model_init(...) context."
                 )
             setattr(fsdp_module.module, "fsdp_group", state.process_group)
 
