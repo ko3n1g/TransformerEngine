@@ -75,11 +75,9 @@ def get_platform():
 
 def get_wheel_url():
     """Construct the wheel URL for the current platform."""
-    torch_version_raw = parse(torch.__version__)
     python_version = f"cp{sys.version_info.major}{sys.version_info.minor}"
     platform_name = get_platform()
     nvte_version = te_version()
-    torch_version = f"{torch_version_raw.major}.{torch_version_raw.minor}"
     cxx11_abi = str(torch._C._GLIBCXX_USE_CXX11_ABI).upper()
 
     # Determine the version numbers that will be used to determine the correct wheel
@@ -100,7 +98,7 @@ def get_wheel_url():
     if os.environ.get("NVIDIA_PRODUCT_NAME", "") == "PyTorch":
         torch_version = str(os.environ.get("NVIDIA_PYTORCH_VERSION"))
     else:
-        torch_version = f"{torch_version_raw.major}.{torch_version_raw.minor}"
+        torch_version = f"{torch.__version__}"
 
     cuda_version = f"{torch_cuda_version.major}"
 
