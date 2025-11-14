@@ -77,6 +77,7 @@ runs:
             --shm-size=64g \
             --workdir /workspace \
             --volume $(pwd):/workspace \
+            --volume ${{ github.action_path }}:${{ github.action_path }} \
             --volume $GITHUB_ENV:$GITHUB_ENV \
             -e PIP_CONSTRAINT= \
             -e GITHUB_ENV=$GITHUB_ENV \
