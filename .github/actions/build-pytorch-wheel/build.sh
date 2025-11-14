@@ -2,7 +2,7 @@
 
 set -eoxu pipefail
 
-export MAX_JOBS=$([ "$MATRIX_CUDA_VERSION" == "129" ] && echo 1 || echo 2)
+export MAX_JOBS=2
 export NVCC_THREADS=2
 export NVTE_NO_LOCAL_VERSION=1
 
