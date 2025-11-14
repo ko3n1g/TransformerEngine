@@ -51,6 +51,7 @@ jobs:
     outputs:
       build-wheel-matrix: ${{ steps.matrix.outputs.matrix }}
       release-assets-url: ${{ steps.release-assets-url.outputs.upload_url }}
+      ngc-images: ${{ steps.check_for_ngc_images.outputs.IMAGES }}
     steps:
       - name: Build release matrix
         id: matrix
@@ -93,6 +94,7 @@ jobs:
       - name: Get release assets url
         env:
           EVENT: ${{ github.event_name }}
+        if: (success() || skipped()) && !cancelled()
         id: release-assets-url
         run: |
           if [[ "$EVENT" == "release" ]]; then
@@ -100,6 +102,13 @@ jobs:
           else
             echo "upload_url=${{ steps.get_current_release.outputs.upload_url }}" | tee -a "$GITHUB_OUTPUT"
           fi
+
+      - name: Check for NGC PyTorch images
+        id: check_for_ngc_images
+        if: (success() || skipped()) && !cancelled()
+        run: |
+          bash ./.github/scripts/check_for_ngc_images.sh
+          echo "IMAGES=$(cat ngc_images.json| jq -cr)" | tee -a $GITHUB_OUTPUT
 
   build_wheels:
     name: Build Wheel
@@ -136,3 +145,23 @@ jobs:
           asset_path: ./dist/${{ steps.build-pytorch-wheel.outputs.wheel_name }}
           asset_name: ${{ steps.build-pytorch-wheel.outputs.wheel_name }}
           asset_content_type: application/*
+
+  build_wheels_for_ngc:
+    name: Build Wheels for NGC PyTorch images
+    runs-on: ubuntu-latest
+    needs: pre-flight
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-22.04]
+        container-image: ${{ fromJson(needs.pre-flight.outputs.ngc-images) }}
+    steps:
+      - name: "Checkout"
+        uses: actions/checkout@v3
+
+      - name: "Build PyTorch Wheel"
+        uses: ./.github/actions/build-pytorch-wheel
+        id: build-pytorch-wheel
+        with:
+          runs-on: ${{ matrix.os }}
+          base-image: ${{ matrix.container-image }}
