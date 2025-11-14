@@ -107,4 +107,4 @@ runs:
     - name: Log Built Wheels
       shell: bash -euxo pipefail {0}
       run: |
-        ls dist
+        ls transformer_engine/pytorch/dist
