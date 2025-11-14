@@ -8,7 +8,7 @@ export NVTE_NO_LOCAL_VERSION=1
 
 # 5h timeout since GH allows max 6h and we want some buffer
 EXIT_CODE=0
-timeout 5h python setup.py bdist_wheel --dist-dir=dist || EXIT_CODE=$?
+timeout 5h /opt/venv/bin/python setup.py bdist_wheel --dist-dir=dist || EXIT_CODE=$?
 
 if [ $EXIT_CODE -eq 0 ]; then
     wheel_name=$(/opt/venv/bin/python -c "import setup; print(setup.get_wheel_url()[1])" | tail -n 1)
