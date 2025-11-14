@@ -2,8 +2,6 @@
 
 set -eoxu pipefail
 
-export MAX_JOBS=2
-export NVCC_THREADS=2
 export NVTE_NO_LOCAL_VERSION=1
 export FORCE_CXX11_ABI=$CXX11_ABI
 
