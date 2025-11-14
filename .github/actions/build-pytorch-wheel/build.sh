@@ -1,0 +1,19 @@
+#!/bin/bash
+
+set -eoxu pipefail
+
+export MAX_JOBS=$([ "$MATRIX_CUDA_VERSION" == "129" ] && echo 1 || echo 2)
+export NVCC_THREADS=2
+export NVTE_NO_LOCAL_VERSION=1
+
+# 5h timeout since GH allows max 6h and we want some buffer
+EXIT_CODE=0
+timeout 5h python setup.py bdist_wheel --dist-dir=dist || EXIT_CODE=$?
+
+if [ $EXIT_CODE -eq 0 ]; then
+    wheel_name=$(/opt/venv/bin/python -c "import setup; print(setup.get_wheel_url()[1])" | tail -n 1)
+    ls dist/*whl |xargs -I {} mv {} dist/${wheel_name}
+    echo "wheel_name=${wheel_name}" | tee -a "$GITHUB_OUTPUT"
+fi
+
+echo $EXIT_CODE
