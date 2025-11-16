@@ -17,6 +17,7 @@ ARG CUDA_VERSION=12.9.1
 ARG CUDNN_MAJOR_VERSION=9
 ENV PATH=/opt/venv/bin:$PATH
 ENV PYTHONUNBUFFERED=1
+ARG AARCH=x86_64
 
 # Install Python
 RUN apt-get update && \
@@ -31,7 +32,7 @@ RUN CUDA_MAJOR_VERSION=$(echo $CUDA_VERSION | awk -F \. {'print $1'}) && \
     CUDA_MINOR_VERSION=$(echo $CUDA_VERSION | awk -F \. {'print $2'}) && \
     rm /etc/apt/sources.list.d/cuda*.list || true && \
     rm /etc/apt/sources.list.d/nvidia-cuda.list || true && \
-    wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/cuda-keyring_1.1-1_all.deb && \
+    wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/${AARCH}/cuda-keyring_1.1-1_all.deb && \
     dpkg -i cuda-keyring_1.1-1_all.deb && \
     rm cuda-keyring_1.1-1_all.deb && \
     apt-get update && \

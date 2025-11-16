@@ -27,6 +27,9 @@ inputs:
   base-image:
     description: 'The base image to use for the build'
     required: false
+  aarch:
+    description: 'The architecture to use for the build'
+    required: true
 outputs:
   wheel_name:
     description: 'The name of the built wheel'
@@ -80,6 +83,7 @@ runs:
             --build-arg TORCH_VERSION=${{ inputs.torch-version }} \
             --build-arg CUDA_VERSION=${{ inputs.cuda-version }} \
             --build-arg CUDNN_MAJOR_VERSION=${{ inputs.cudnn-version }} \
+            --build-arg AARCH=${{ inputs.aarch }} \
             .
         else
           docker pull ${BASE_IMAGE}
