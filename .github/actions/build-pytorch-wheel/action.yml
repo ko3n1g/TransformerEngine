@@ -133,7 +133,7 @@ runs:
       run: |
         name=$(ls wheelhouse/transformer_engine_cu*.whl)
 
-        mv $name $(basename $name)
+        sudo mv $name $(basename $name)
         echo "name=$(basename $name)" | tee -a "$GITHUB_OUTPUT"
 
     - name: Get torch wheel name
@@ -143,5 +143,5 @@ runs:
         name=$(ls wheelhouse/transformer_engine_torch*.whl)
         target_name=$(docker run -v $(pwd):/TransformerEngine -v $(pwd)/wheelhouse:/wheelhouse -w /TransformerEngine/transformer_engine/pytorch transformer-engine-build bash -c '/opt/python/cp${PYTHON_VERSION}-cp${PYTHON_VERSION}/bin/pip install wheel; /opt/python/cp${PYTHON_VERSION}-cp${PYTHON_VERSION}/bin/python -c "import setup; print(setup.get_wheel_url()[1])"' | tail -1)
 
-        mv $name $target_name
+        sudo mv $name $target_name
         echo "name=$$target_name" | tee -a "$GITHUB_OUTPUT"
