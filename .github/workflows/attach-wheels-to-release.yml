@@ -155,15 +155,26 @@ jobs:
           NVTE_FRAMEWORK: pytorch
           MAX_JOBS: 1
 
-      - name: Upload Release Asset
+      - name: Upload cu-wheel to Release Assets
         id: upload_release_asset
         uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ needs.pre-flight.outputs.release-assets-url }}
-          asset_path: ./transformer_engine/pytorch/dist/${{ steps.build-pytorch-wheel.outputs.wheel_name }}
-          asset_name: ${{ steps.build-pytorch-wheel.outputs.wheel_name }}
+          asset_path: ${{ steps.build-pytorch-wheel.outputs.get_cu_wheel_name }}
+          asset_name: ${{ steps.build-pytorch-wheel.outputs.get_cu_wheel_name }}
+          asset_content_type: application/*
+
+      - name: Upload torch-wheel to Release Assets
+        id: upload_release_asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.pre-flight.outputs.release-assets-url }}
+          asset_path: ${{ steps.build-pytorch-wheel.outputs.get_torch_wheel_name }}
+          asset_name: ${{ steps.build-pytorch-wheel.outputs.get_torch_wheel_name }}
           asset_content_type: application/*
 
   build_wheels_for_ngc:
@@ -186,13 +197,24 @@ jobs:
         with:
           base-image: ${{ matrix.container-image }}
 
-      - name: Upload Release Asset
+      - name: Upload cu-wheel to Release Assets
         id: upload_release_asset
         uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ needs.pre-flight.outputs.release-assets-url }}
-          asset_path: ./transformer_engine/pytorch/dist/${{ steps.build-pytorch-wheel.outputs.wheel_name }}
-          asset_name: ${{ steps.build-pytorch-wheel.outputs.wheel_name }}
+          asset_path: ${{ steps.build-pytorch-wheel.outputs.get_cu_wheel_name }}
+          asset_name: ${{ steps.build-pytorch-wheel.outputs.get_cu_wheel_name }}
+          asset_content_type: application/*
+
+      - name: Upload torch-wheel to Release Assets
+        id: upload_release_asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.pre-flight.outputs.release-assets-url }}
+          asset_path: ${{ steps.build-pytorch-wheel.outputs.get_torch_wheel_name }}
+          asset_name: ${{ steps.build-pytorch-wheel.outputs.get_torch_wheel_name }}
           asset_content_type: application/*

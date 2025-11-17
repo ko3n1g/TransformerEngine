@@ -27,6 +27,9 @@ git submodule update --init --recursive
 # Install deps
 /opt/python/cp${PYTHON_VERSION}-cp${PYTHON_VERSION}/bin/pip install cmake pybind11[global] ninja setuptools wheel
 
+# Expose the ninja binary
+export PATH=/opt/python/cp${PYTHON_VERSION}-cp${PYTHON_VERSION}/bin/:${PATH}
+
 if $BUILD_METAPACKAGE ; then
         cd /TransformerEngine
         NVTE_BUILD_METAPACKAGE=1 /opt/python/cp${PYTHON_VERSION}-cp${PYTHON_VERSION}/bin/python setup.py bdist_wheel 2>&1 | tee /wheelhouse/logs/metapackage.txt
