@@ -120,8 +120,6 @@ runs:
           -e MAX_JOBS=2 \
           transformer-engine-build
 
-        # Do not fail the job if timeout killed the build
-        exit $EXIT_CODE
         echo ::endgroup::
 
     - name: Log Built Wheels
