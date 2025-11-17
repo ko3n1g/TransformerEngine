@@ -150,7 +150,7 @@ jobs:
           cudnn-version: ${{ matrix.cudnn-version }}
           torch-version: ${{ matrix.torch-version }}
           cxx11_abi: ${{ matrix.cxx11_abi }}
-          aarch: ${{ matrix.os == 'ubuntu-22.04' && 'x86_64' || 'sbsa' }}
+          aarch: ${{ matrix.os == 'ubuntu-22.04' && 'x86' || 'aarch' }}
         env:
           NVTE_FRAMEWORK: pytorch
           MAX_JOBS: 1

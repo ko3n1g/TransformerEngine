@@ -70,26 +70,40 @@ runs:
         path: build-tools
         submodules: recursive
 
+    - name: Build manylinux base image
+      shell: bash -euxo pipefail {0}
+      env:
+        PYTHON_VERSION: ${{ inputs.python-version }}
+      run: |
+        cd build_tools/wheel_utils
+        docker build \
+          -t manylinux-base-image \
+          -f Dockerfile.${{ inputs.aarch }} \
+          --build-arg PYTHON_VERSION=$(echo $PYTHON_VERSION | sed 's/\.//') \
+          --build-arg BUILD_JAX=false \
+          --build-arg BUILD_PYTORCH_BDIST=true \
+          .
+
     - name: Build image
       shell: bash -euxo pipefail {0}
       env:
         BASE_IMAGE: ${{ inputs.base-image }}
+        PYTHON_VERSION: ${{ inputs.python-version }}
+        TORCH_VERSION: ${{ inputs.torch-version }}
       run: |
         if [[ "${BASE_IMAGE}" == "" ]]; then
           docker build \
             -t transformer-engine-build \
             -f build-tools/.github/actions/build-pytorch-wheel/Dockerfile \
-            --build-arg PYTHON_VERSION=${{ inputs.python-version }} \
-            --build-arg TORCH_VERSION=${{ inputs.torch-version }} \
-            --build-arg CUDA_VERSION=${{ inputs.cuda-version }} \
-            --build-arg CUDNN_MAJOR_VERSION=${{ inputs.cudnn-version }} \
-            --build-arg AARCH=${{ inputs.aarch }} \
+            --build-arg PYTHON_VERSION=$(echo $PYTHON_VERSION | sed 's/\.//') \
+            --build-arg TORCH_VERSION=$TORCH_VERSION \
+            --build-arg MANYLINUX_BASE_IMAGE=manylinux-base-image  \
             .
         else
           docker pull ${BASE_IMAGE}
           docker tag ${BASE_IMAGE} transformer-engine-build
         fi
-    - name: Build wheel
+    - name: Build wheels
       shell: bash -euxo pipefail {0}
       id: build_wheel
       env:
@@ -97,16 +111,10 @@ runs:
       run: |
         echo ::group::Build wheel
 
-        EXIT_CODE=$(docker run \
-            --rm \
-            --shm-size=64g \
-            --workdir /workspace/transformer_engine/pytorch \
-            --volume $(pwd):/workspace \
-            --volume $GITHUB_OUTPUT:$GITHUB_OUTPUT \
-            -e PIP_CONSTRAINT= \
-            -e CXX11_ABI=$CXX11_ABI \
-            -e GITHUB_OUTPUT=$GITHUB_OUTPUT \
-            transformer-engine-build bash /workspace/build-tools/.github/actions/build-pytorch-wheel/build.sh | tail -n 1)
+        docker run \
+          -v $(pwd):/TransformerEngine \
+          -v $(pwd)/wheelhouse:/wheelhouse \
+          transformer-engine-build
 
         # Do not fail the job if timeout killed the build
         exit $EXIT_CODE
@@ -115,4 +123,4 @@ runs:
     - name: Log Built Wheels
       shell: bash -euxo pipefail {0}
       run: |
-        ls transformer_engine/pytorch/dist
+        ls wheelhouse

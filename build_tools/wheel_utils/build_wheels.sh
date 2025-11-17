@@ -10,6 +10,8 @@ BUILD_COMMON=${3:-true}
 BUILD_PYTORCH=${4:-true}
 BUILD_JAX=${5:-true}
 CUDA_MAJOR=${6:-12}
+PYTHON_VERSION=${7:-310}
+BUILD_PYTORCH_BDIST=${8:-false}
 
 export NVTE_RELEASE_BUILD=1
 export PIP_CONSTRAINT=""
@@ -23,11 +25,11 @@ git checkout $TARGET_BRANCH
 git submodule update --init --recursive
 
 # Install deps
-/opt/python/cp310-cp310/bin/pip install cmake pybind11[global] ninja setuptools wheel
+/opt/python/cp${PYTHON_VERSION}-cp${PYTHON_VERSION}/bin/pip install cmake pybind11[global] ninja setuptools wheel
 
 if $BUILD_METAPACKAGE ; then
         cd /TransformerEngine
-        NVTE_BUILD_METAPACKAGE=1 /opt/python/cp310-cp310/bin/python setup.py bdist_wheel 2>&1 | tee /wheelhouse/logs/metapackage.txt
+        NVTE_BUILD_METAPACKAGE=1 /opt/python/cp${PYTHON_VERSION}-cp${PYTHON_VERSION}/bin/python setup.py bdist_wheel 2>&1 | tee /wheelhouse/logs/metapackage.txt
         mv dist/* /wheelhouse/
 fi
 
@@ -36,15 +38,15 @@ if $BUILD_COMMON ; then
         WHL_BASE="transformer_engine-${VERSION}"
 
         # Create the wheel.
-        /opt/python/cp310-cp310/bin/python setup.py bdist_wheel --verbose --python-tag=py3 --plat-name=$PLATFORM 2>&1 | tee /wheelhouse/logs/common.txt
+        /opt/python/cp${PYTHON_VERSION}-cp${PYTHON_VERSION}/bin/python setup.py bdist_wheel --verbose --python-tag=py3 --plat-name=$PLATFORM 2>&1 | tee /wheelhouse/logs/common.txt
 
         # Repack the wheel for specific cuda version.
-        /opt/python/cp310-cp310/bin/wheel unpack dist/*
+        /opt/python/cp${PYTHON_VERSION}-cp${PYTHON_VERSION}/bin/wheel unpack dist/*
         # From python 3.10 to 3.11, the package name delimiter in metadata got changed from - (hyphen) to _ (underscore).
         sed -i "s/Name: transformer-engine/Name: transformer-engine-cu${CUDA_MAJOR}/g" "transformer_engine-${VERSION}/transformer_engine-${VERSION}.dist-info/METADATA"
         sed -i "s/Name: transformer_engine/Name: transformer_engine_cu${CUDA_MAJOR}/g" "transformer_engine-${VERSION}/transformer_engine-${VERSION}.dist-info/METADATA"
         mv "${WHL_BASE}/${WHL_BASE}.dist-info" "${WHL_BASE}/transformer_engine_cu${CUDA_MAJOR}-${VERSION}.dist-info"
-        /opt/python/cp310-cp310/bin/wheel pack ${WHL_BASE}
+        /opt/python/cp${PYTHON_VERSION}-cp${PYTHON_VERSION}/bin/wheel pack ${WHL_BASE}
 
         # Rename the wheel to make it python version agnostic.
         whl_name=$(basename dist/*)
@@ -56,14 +58,21 @@ fi
 
 if $BUILD_PYTORCH ; then
 	cd /TransformerEngine/transformer_engine/pytorch
-	/opt/python/cp310-cp310/bin/pip install torch
-	/opt/python/cp310-cp310/bin/python setup.py sdist 2>&1 | tee /wheelhouse/logs/torch.txt
+        /opt/python/cp${PYTHON_VERSION}-cp${PYTHON_VERSION}/bin/pip install torch
+	/opt/python/cp${PYTHON_VERSION}-cp${PYTHON_VERSION}/bin/python setup.py sdist 2>&1 | tee /wheelhouse/logs/torch.txt
+	cp dist/* /wheelhouse/
+fi
+
+if $BUILD_PYTORCH_BDIST ; then
+        cd /TransformerEngine/transformer_engine/pytorch
+        /opt/python/cp${PYTHON_VERSION}-cp${PYTHON_VERSION}/bin/pip install torch
+	/opt/python/cp${PYTHON_VERSION}-cp${PYTHON_VERSION}/bin/python setup.py bdist_wheel 2>&1 | tee /wheelhouse/logs/torch.txt
 	cp dist/* /wheelhouse/
 fi
 
 if $BUILD_JAX ; then
 	cd /TransformerEngine/transformer_engine/jax
-	/opt/python/cp310-cp310/bin/pip install "jax[cuda${CUDA_MAJOR}_local]" jaxlib
-	/opt/python/cp310-cp310/bin/python setup.py sdist 2>&1 | tee /wheelhouse/logs/jax.txt
+	/opt/python/cp${PYTHON_VERSION}-cp${PYTHON_VERSION}/bin/pip install "jax[cuda${CUDA_MAJOR}_local]" jaxlib
+	/opt/python/cp${PYTHON_VERSION}-cp${PYTHON_VERSION}/bin/python setup.py sdist 2>&1 | tee /wheelhouse/logs/jax.txt
 	cp dist/* /wheelhouse/
 fi
