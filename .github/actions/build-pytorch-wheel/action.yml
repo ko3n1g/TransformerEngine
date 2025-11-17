@@ -114,6 +114,7 @@ runs:
         docker run \
           -v $(pwd):/TransformerEngine \
           -v $(pwd)/wheelhouse:/wheelhouse \
+          -e NUM_JOBS=2 \
           transformer-engine-build
 
         # Do not fail the job if timeout killed the build
