@@ -156,7 +156,6 @@ jobs:
           MAX_JOBS: 1
 
       - name: Upload cu-wheel to Release Assets
-        id: upload_release_asset
         uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -167,7 +166,6 @@ jobs:
           asset_content_type: application/*
 
       - name: Upload torch-wheel to Release Assets
-        id: upload_release_asset
         uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -198,7 +196,6 @@ jobs:
           base-image: ${{ matrix.container-image }}
 
       - name: Upload cu-wheel to Release Assets
-        id: upload_release_asset
         uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -209,7 +206,6 @@ jobs:
           asset_content_type: application/*
 
       - name: Upload torch-wheel to Release Assets
-        id: upload_release_asset
         uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
